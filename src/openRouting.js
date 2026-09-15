@@ -1,7 +1,5 @@
-const OPEN_ROUTE_CACHE = new Map()
-
-const TRANSITOUS_PLAN_URL = import.meta.env.DEV ? '/open-transit/api/v6/plan' : 'https://api.transitous.org/api/v6/plan'
-const VALHALLA_ROUTE_URL = import.meta.env.DEV ? '/open-route/route' : 'https://valhalla1.openstreetmap.de/route'
+const OTP_CACHE = new Map()
+const OTP_GRAPHQL_URL = '/api/transit/otp/gtfs/v1'
 
 function coords(point) {
   const lat = Number(point?.latitude)
@@ -18,8 +16,8 @@ function formatDistance(meters) {
   return `${km.toFixed(km >= 10 ? 0 : 1)} km`
 }
 
-function formatMinutes(totalMinutes) {
-  const total = Math.max(1, Math.round(Number(totalMinutes || 0)))
+function formatSeconds(seconds) {
+  const total = Math.max(1, Math.round(Number(seconds || 0) / 60))
   if (total < 60) return `${total} min`
   const hours = Math.floor(total / 60)
   const minutes = total % 60
@@ -28,234 +26,218 @@ function formatMinutes(totalMinutes) {
 
 function formatClock(value) {
   if (!value) return ''
-  const date = value instanceof Date ? value : new Date(value)
+  const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
-function haversineMeters(a, b) {
-  const p1 = coords(a)
-  const p2 = coords(b)
-  const rad = (value) => value * Math.PI / 180
-  const dLat = rad(p2.lat - p1.lat)
-  const dLon = rad(p2.lon - p1.lon)
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(p1.lat)) * Math.cos(rad(p2.lat)) * Math.sin(dLon / 2) ** 2
-  return 6371000 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
-}
-
-function routeCacheKey(provider, origin, destination, extra = '') {
+function cacheKey(origin, destination, departureTime) {
   const a = coords(origin)
   const b = coords(destination)
-  return `${provider}|${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}|${extra}`
+  return `${a.lat.toFixed(5)},${a.lon.toFixed(5)}|${b.lat.toFixed(5)},${b.lon.toFixed(5)}|${departureTime ? String(departureTime).slice(0, 16) : 'now'}`
 }
 
-async function fetchJson(url, options = {}) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12000)
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal })
-    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
-    return await response.json()
-  } finally {
-    clearTimeout(timeout)
+const QUERY = `
+query DiyTravelPlan($origin: PlanLabeledLocationInput!, $destination: PlanLabeledLocationInput!, $dateTime: PlanDateTimeInput, $modes: PlanModesInput) {
+  planConnection(
+    origin: $origin
+    destination: $destination
+    dateTime: $dateTime
+    first: 8
+    searchWindow: "PT2H"
+    modes: $modes
+  ) {
+    routingErrors { code description inputField }
+    edges {
+      node {
+        duration
+        start
+        end
+        numberOfTransfers
+        walkDistance
+        walkTime
+        legs {
+          mode
+          transitLeg
+          duration
+          distance
+          start { scheduledTime estimated { time } }
+          end { scheduledTime estimated { time } }
+          from { name lat lon stop { gtfsId name platformCode } }
+          to { name lat lon stop { gtfsId name platformCode } }
+          route { shortName longName mode }
+          trip { tripHeadsign }
+        }
+      }
+    }
   }
+}`
+
+function classifyLegMode(mode) {
+  const value = String(mode || '').toUpperCase()
+  if (['BUS', 'COACH', 'TROLLEYBUS'].includes(value)) return 'BUS'
+  if (['RAIL', 'SUBWAY', 'TRAM', 'MONORAIL', 'FUNICULAR', 'GONDOLA', 'CABLE_CAR'].includes(value)) return 'RAIL'
+  if (value === 'FERRY') return 'FERRY'
+  return ''
 }
 
-function normalizeValhalla(data, providerMode) {
-  const summary = data?.trip?.summary || {}
-  const seconds = Number(summary.time || 0)
-  const kilometers = Number(summary.length || 0)
-  if (!seconds || !Number.isFinite(seconds)) return null
-  const durationMillis = seconds * 1000
-  const distanceMeters = Number.isFinite(kilometers) ? kilometers * 1000 : 0
-  return {
-    provider: 'Valhalla + OpenStreetMap',
-    providerKind: 'open-street',
-    providerMode,
-    distanceMeters,
-    duration: `${seconds}s`,
-    durationMillis,
-    localizedValues: {
-      duration: { text: formatMinutes(seconds / 60) },
-      distance: { text: formatDistance(distanceMeters) },
-    },
-    travelAdvisory: null,
-    warnings: [],
-    legs: [],
-    transitSummary: null,
-    nextDepartureTime: '',
-  }
+function primaryMode(itinerary) {
+  const transit = (itinerary?.legs || []).filter((leg) => leg?.transitLeg)
+  const modes = transit.map((leg) => classifyLegMode(leg.mode)).filter(Boolean)
+  if (modes.includes('FERRY')) return 'FERRY'
+  if (modes.includes('RAIL')) return 'RAIL'
+  if (modes.includes('BUS')) return 'BUS'
+  return ''
 }
 
-async function valhallaRoute(origin, destination, mode) {
-  const costing = mode === 'WALK' ? 'pedestrian' : 'auto'
-  const key = routeCacheKey('valhalla', origin, destination, costing)
-  if (OPEN_ROUTE_CACHE.has(key)) return OPEN_ROUTE_CACHE.get(key)
-  const a = coords(origin)
-  const b = coords(destination)
-  const payload = {
-    locations: [{ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon }],
-    costing,
-    units: 'kilometers',
-    directions_type: 'none',
-    id: 'diy-travel-v1.7',
-  }
-  const url = `${VALHALLA_ROUTE_URL}?json=${encodeURIComponent(JSON.stringify(payload))}`
-  const data = await fetchJson(url, { headers: { 'X-Client-Id': 'diy-travel-prototype' } })
-  const normalized = normalizeValhalla(data, mode)
-  if (!normalized) throw new Error('No open street route found')
-  OPEN_ROUTE_CACHE.set(key, normalized)
-  return normalized
+function legLine(leg) {
+  const mode = String(leg?.mode || '').replaceAll('_', ' ')
+  const line = leg?.route?.shortName || leg?.route?.longName || ''
+  const headsign = leg?.trip?.tripHeadsign || ''
+  const base = [mode, line].filter(Boolean).join(' · ')
+  return headsign ? `${base}${base ? ' · ' : ''}to ${headsign}` : base
 }
 
-const BUS_MODES = new Set(['BUS', 'COACH', 'TROLLEYBUS', 'SHUTTLE'])
-const FERRY_MODES = new Set(['FERRY', 'WATER', 'WATERBUS', 'SHIP'])
-const RAIL_MODES = new Set([
-  'RAIL', 'TRAIN', 'SUBWAY', 'TRAM', 'SUBURBAN', 'HIGH_SPEED', 'LONG_DISTANCE',
-  'REGIONAL', 'METRO', 'MONORAIL', 'LIGHT_RAIL', 'FUNICULAR', 'CABLE_CAR',
-])
-const NON_TRANSIT_MODES = new Set(['WALK', 'FOOT', 'BIKE', 'BICYCLE', 'CAR', 'TAXI'])
-
-function legMode(leg) {
-  return String(leg?.mode || leg?.transportMode || leg?.routeType || '').toUpperCase()
-}
-
-function primaryModeForItinerary(itinerary) {
-  const modes = (itinerary?.legs || []).map(legMode).filter((mode) => mode && !NON_TRANSIT_MODES.has(mode))
-  if (modes.some((mode) => FERRY_MODES.has(mode) || /FERRY|BOAT|SHIP/.test(mode))) return 'FERRY'
-  if (modes.some((mode) => RAIL_MODES.has(mode) || /RAIL|TRAIN|SUBWAY|TRAM|METRO|MONORAIL/.test(mode))) return 'RAIL'
-  if (modes.some((mode) => BUS_MODES.has(mode) || /BUS|COACH|SHUTTLE/.test(mode))) return 'BUS'
-  return modes.length ? 'TRANSIT' : ''
-}
-
-function placeName(place) {
-  return place?.name || place?.stop?.name || place?.parent?.name || ''
-}
-
-function lineName(leg) {
-  return leg?.routeShortName || leg?.routeLongName || leg?.routeName || leg?.tripShortName || leg?.displayName || leg?.agencyName || legMode(leg)
-}
-
-function normalizeMotisItinerary(itinerary, mode, origin, destination) {
+function normalizeItinerary(itinerary, mode) {
   const legs = Array.isArray(itinerary?.legs) ? itinerary.legs : []
-  const transitLegs = legs.filter((leg) => !NON_TRANSIT_MODES.has(legMode(leg)))
+  const transitLegs = legs.filter((leg) => leg?.transitLeg)
   if (!transitLegs.length) return null
   const first = transitLegs[0]
   const last = transitLegs[transitLegs.length - 1]
-  const seconds = Number(itinerary.duration || 0)
-  if (!seconds) return null
-
-  const walkBefore = legs.slice(0, Math.max(0, legs.indexOf(first))).filter((leg) => ['WALK', 'FOOT'].includes(legMode(leg)))
+  const firstIndex = legs.indexOf(first)
   const lastIndex = legs.lastIndexOf(last)
-  const walkAfter = legs.slice(lastIndex + 1).filter((leg) => ['WALK', 'FOOT'].includes(legMode(leg)))
+  const walkBefore = legs.slice(0, Math.max(0, firstIndex)).filter((leg) => String(leg.mode).toUpperCase() === 'WALK')
+  const walkAfter = legs.slice(lastIndex + 1).filter((leg) => String(leg.mode).toUpperCase() === 'WALK')
+  const walkMeters = (list) => list.reduce((sum, leg) => sum + Number(leg.distance || 0), 0)
   const walkSeconds = (list) => list.reduce((sum, leg) => sum + Number(leg.duration || 0), 0)
-  const walkMeters = (list) => list.reduce((sum, leg) => sum + Number(leg.distance || leg.distanceMeters || 0), 0)
-  const totalMeters = legs.reduce((sum, leg) => sum + Number(leg.distance || leg.distanceMeters || 0), 0) || haversineMeters(origin, destination)
-  const lines = [...new Set(transitLegs.map(lineName).filter(Boolean))]
+  const totalMeters = legs.reduce((sum, leg) => sum + Number(leg.distance || 0), 0)
+  const seconds = Number(itinerary?.duration || 0)
+  if (!seconds) return null
+  const startIso = first?.start?.estimated?.time || first?.start?.scheduledTime || itinerary?.start || ''
+  const endIso = last?.end?.estimated?.time || last?.end?.scheduledTime || itinerary?.end || ''
+  const lines = [...new Set(transitLegs.map(legLine).filter(Boolean))]
+  const hasRealtime = transitLegs.some((leg) => leg?.start?.estimated?.time || leg?.end?.estimated?.time)
 
   return {
-    provider: 'Transitous / MOTIS',
-    providerKind: 'open-transit',
+    provider: 'OpenTripPlanner · local GTFS',
+    providerKind: 'otp',
     providerMode: mode,
     distanceMeters: totalMeters,
     duration: `${seconds}s`,
     durationMillis: seconds * 1000,
     localizedValues: {
-      duration: { text: formatMinutes(seconds / 60) },
-      distance: { text: totalMeters ? formatDistance(totalMeters) : '' },
+      duration: { text: formatSeconds(seconds) },
+      distance: { text: formatDistance(totalMeters) },
     },
     travelAdvisory: null,
     warnings: [],
     legs: [],
     nextDepartureTime: '',
+    realtime: hasRealtime,
     transitSummary: {
-      departureStop: placeName(first.from),
-      arrivalStop: placeName(last.to),
-      departureTime: formatClock(first.startTime || itinerary.startTime),
-      departureTimeIso: first.startTime || itinerary.startTime || '',
-      arrivalTime: formatClock(last.endTime || itinerary.endTime),
-      arrivalTimeIso: last.endTime || itinerary.endTime || '',
-      headsign: first.headsign || first.tripHeadsign || '',
-      stopCount: transitLegs.reduce((sum, leg) => sum + Math.max(0, Number(leg.intermediateStops?.length || leg.stopCount || 0)), 0),
-      transfers: Number(itinerary.transfers ?? Math.max(0, transitLegs.length - 1)),
+      departureStop: first?.from?.stop?.name || first?.from?.name || '',
+      arrivalStop: last?.to?.stop?.name || last?.to?.name || '',
+      departureTime: formatClock(startIso),
+      departureTimeIso: startIso,
+      scheduledDepartureTime: formatClock(first?.start?.scheduledTime || ''),
+      arrivalTime: formatClock(endIso),
+      arrivalTimeIso: endIso,
+      scheduledArrivalTime: formatClock(last?.end?.scheduledTime || ''),
+      headsign: first?.trip?.tripHeadsign || '',
+      platform: first?.from?.stop?.platformCode || '',
+      arrivalPlatform: last?.to?.stop?.platformCode || '',
+      stopCount: 0,
+      transfers: Number(itinerary?.numberOfTransfers ?? Math.max(0, transitLegs.length - 1)),
       lineSummary: lines.join(' → '),
-      firstVehicleType: legMode(first),
-      firstVehicleName: legMode(first),
+      firstVehicleType: String(first?.mode || '').toUpperCase(),
+      firstVehicleName: String(first?.mode || '').toUpperCase(),
       walkBeforeDistance: formatDistance(walkMeters(walkBefore)),
-      walkBeforeDuration: walkSeconds(walkBefore) ? formatMinutes(walkSeconds(walkBefore) / 60) : '',
+      walkBeforeDuration: walkSeconds(walkBefore) ? formatSeconds(walkSeconds(walkBefore)) : '',
       walkAfterDistance: formatDistance(walkMeters(walkAfter)),
-      walkAfterDuration: walkSeconds(walkAfter) ? formatMinutes(walkSeconds(walkAfter) / 60) : '',
+      walkAfterDuration: walkSeconds(walkAfter) ? formatSeconds(walkSeconds(walkAfter)) : '',
     },
   }
 }
 
-async function transitousRoutes(origin, destination, departureTime) {
-  const key = routeCacheKey('transitous', origin, destination, departureTime || 'now')
-  if (OPEN_ROUTE_CACHE.has(key)) return OPEN_ROUTE_CACHE.get(key)
+async function postGraphQl(body) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 18000)
+  try {
+    const response = await fetch(OTP_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'OTPTimeout': '15000' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    let json = null
+    try { json = text ? JSON.parse(text) : null } catch {}
+    if (!response.ok) {
+      const code = json?.error || json?.code || (response.status === 404 ? 'OTP_NOT_CONFIGURED' : `OTP_HTTP_${response.status}`)
+      const error = new Error(code)
+      error.code = code
+      error.status = response.status
+      throw error
+    }
+    if (!json) {
+      const error = new Error('OTP_INVALID_RESPONSE')
+      error.code = 'OTP_INVALID_RESPONSE'
+      throw error
+    }
+    if (json?.errors?.length) {
+      const error = new Error('OTP_QUERY_ERROR')
+      error.code = 'OTP_QUERY_ERROR'
+      error.debug = json.errors.map((item) => item.message).join('; ')
+      throw error
+    }
+    return json
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function getOtpTransitComparison({ origin, destination, departureTime = null, bypassCache = false }) {
+  const key = cacheKey(origin, destination, departureTime)
+  if (!bypassCache && OTP_CACHE.has(key)) return OTP_CACHE.get(key)
   const a = coords(origin)
   const b = coords(destination)
-  const params = new URLSearchParams({
-    fromPlace: `${a.lat},${a.lon}`,
-    toPlace: `${b.lat},${b.lon}`,
-    transitModes: 'TRANSIT',
-    directModes: '',
-    detailedLegs: 'false',
-    detailedTransfers: 'false',
-    useRoutedTransfers: 'true',
-    withFares: 'true',
-    numItineraries: '6',
-    maxItineraries: '6',
-    maxTransfers: '4',
-    maxDirectTime: '0',
-    searchWindow: '3600',
-    maxPreTransitTime: '1800',
-    maxPostTransitTime: '1800',
-    realtimeMode: 'REALTIME',
-    language: 'en',
-  })
-  if (departureTime) params.set('time', departureTime)
+  const variables = {
+    origin: { label: 'Origin', location: { coordinate: { latitude: a.lat, longitude: a.lon } } },
+    destination: { label: 'Destination', location: { coordinate: { latitude: b.lat, longitude: b.lon } } },
+    dateTime: { earliestDeparture: departureTime || new Date().toISOString() },
+    modes: {
+      transitOnly: true,
+      transit: {
+        access: ['WALK'],
+        egress: ['WALK'],
+        transfer: ['WALK'],
+        transit: [
+          { mode: 'BUS' }, { mode: 'COACH' }, { mode: 'TROLLEYBUS' },
+          { mode: 'RAIL' }, { mode: 'SUBWAY' }, { mode: 'TRAM' },
+          { mode: 'MONORAIL' }, { mode: 'FUNICULAR' }, { mode: 'FERRY' },
+        ],
+      },
+    },
+  }
 
-  const data = await fetchJson(`${TRANSITOUS_PLAN_URL}?${params.toString()}`)
-  const itineraries = Array.isArray(data?.itineraries) ? data.itineraries : []
+  const json = await postGraphQl({ query: QUERY, variables })
+  const edges = json?.data?.planConnection?.edges || []
   const grouped = { BUS: [], RAIL: [], FERRY: [] }
-  itineraries.forEach((itinerary) => {
-    const mode = primaryModeForItinerary(itinerary)
+  edges.forEach((edge) => {
+    const itinerary = edge?.node
+    const mode = primaryMode(itinerary)
     if (!grouped[mode]) return
-    const route = normalizeMotisItinerary(itinerary, mode, origin, destination)
+    const route = normalizeItinerary(itinerary, mode)
     if (route) grouped[mode].push(route)
   })
-
-  Object.values(grouped).forEach((routes) => routes.sort((a, b) => a.durationMillis - b.durationMillis))
-  for (const mode of ['BUS', 'RAIL', 'FERRY']) {
-    const routes = grouped[mode]
-    if (routes.length > 1) routes[0].nextDepartureTime = routes[1].transitSummary?.departureTime || ''
+  Object.values(grouped).forEach((list) => list.sort((a, b) => a.durationMillis - b.durationMillis))
+  for (const mode of Object.keys(grouped)) {
+    if (grouped[mode].length > 1) grouped[mode][0].nextDepartureTime = grouped[mode][1].transitSummary?.departureTime || ''
   }
-  OPEN_ROUTE_CACHE.set(key, grouped)
+  OTP_CACHE.set(key, grouped)
   return grouped
 }
 
-export async function getOpenRouteComparison({ origin, destination, departureTime = null }) {
-  const results = []
-
-  const [walkResult, driveResult, transitResult] = await Promise.allSettled([
-    valhallaRoute(origin, destination, 'WALK'),
-    valhallaRoute(origin, destination, 'DRIVE'),
-    transitousRoutes(origin, destination, departureTime),
-  ])
-
-  const walkRoute = walkResult.status === 'fulfilled' ? walkResult.value : null
-  const driveRoute = driveResult.status === 'fulfilled' ? driveResult.value : null
-  const transit = transitResult.status === 'fulfilled' ? transitResult.value : { BUS: [], RAIL: [], FERRY: [] }
-
-  results.push({ mode: 'WALK', route: walkRoute, minutes: walkRoute ? Math.round(walkRoute.durationMillis / 60000) : null, error: walkRoute ? '' : 'Not applicable', provider: walkRoute?.provider || '' })
-  for (const mode of ['BUS', 'RAIL', 'FERRY']) {
-    const route = transit[mode]?.[0] || null
-    results.push({ mode, route, minutes: route ? Math.round(route.durationMillis / 60000) : null, error: route ? '' : 'Not applicable', provider: route?.provider || '' })
-  }
-  results.push({ mode: 'DRIVE', route: driveRoute, minutes: driveRoute ? Math.round(driveRoute.durationMillis / 60000) : null, error: driveRoute ? '' : 'Not applicable', provider: driveRoute?.provider || '' })
-  return results
-}
-
-export function resetOpenRouteCache() {
-  OPEN_ROUTE_CACHE.clear()
+export function resetOtpCache() {
+  OTP_CACHE.clear()
 }

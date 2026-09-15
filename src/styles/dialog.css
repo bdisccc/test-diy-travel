@@ -1,0 +1,136 @@
+/* Dialogs */
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(13, 31, 27, 0.42);
+  backdrop-filter: blur(5px);
+}
+
+.app-dialog {
+  width: min(100%, 520px);
+  max-height: min(82vh, 680px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid #dbe6e1;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(14, 43, 35, 0.2);
+}
+
+.app-dialog.danger {
+  border-color: #efc8c4;
+}
+
+.app-dialog-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 12px;
+}
+
+.app-dialog-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.app-dialog.danger .app-dialog-icon {
+  background: #fff1ef;
+  color: #bd433c;
+}
+
+.app-dialog-heading h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.app-dialog-close {
+  justify-self: end;
+}
+
+.app-dialog-message {
+  margin: 18px 0 0;
+  color: #364741;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog-detail {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f3f8f6;
+  color: #60706b;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog.danger .app-dialog-detail {
+  background: #fff5f3;
+  color: #8d504a;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 599px) {
+  .app-dialog-backdrop {
+    align-items: end;
+    padding: 8px;
+  }
+
+  .app-dialog {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom)));
+    padding: 14px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    border-radius: 20px 20px 12px 12px;
+  }
+
+  .app-dialog-heading {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 9px;
+  }
+
+  .app-dialog-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .app-dialog-heading h3 {
+    font-size: 18px;
+  }
+
+  .app-dialog-message {
+    font-size: 13px;
+  }
+
+  .app-dialog-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .app-dialog-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}

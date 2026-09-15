@@ -7,7 +7,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
-  ChevronRight,
+  ChevronDown,
   CircleDollarSign,
   Copy,
   Car,
@@ -35,13 +35,18 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { getGooglePlaceDetails, hasGoogleMapsKey, searchGooglePlaces } from './googleMaps.js'
+import { getGooglePlaceDetails, hasGoogleMapsKey, searchGoogleNearbyPlaces, searchGooglePlaces } from './googleMaps.js'
+import AppDialog from './components/AppDialog.jsx'
+import PlacePhoto from './components/PlacePhoto.jsx'
+import { installButtonDebugger } from './debug/buttonDebug.js'
+import './styles/nearby.css'
 import { getRouteComparison } from './routes.js'
 import { regionalTransitSource } from './regionalTransit.js'
 
 const STORAGE_KEY = 'diy-travel-app-v1'
 const PLAN_LIBRARY_KEY = 'diy-travel-plan-library-v1'
 const ACTIVE_PLAN_KEY = 'diy-travel-active-plan-v1'
+const NAVIGATION_STATE_KEY = 'diy-travel-navigation-state-v1'
 
 const emptyMapFields = {
   address: '',
@@ -153,6 +158,7 @@ const demoState = {
     shopping: 6000,
     spentOther: 2590,
     dailyTargets: {},
+    discounts: [],
   },
   shopping: [
     { id: 201, name: 'EasyCard', planned: 500, actual: 500, quantity: 1, priority: 'Must Buy', bought: true },
@@ -202,6 +208,24 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function safeStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value)
+    return true
+  } catch (error) {
+    console.warn(`DIY Travel could not save ${key}:`, error)
+    return false
+  }
+}
+
+function safeStorageRemove(key) {
+  try {
+    localStorage.removeItem(key)
+  } catch (error) {
+    console.warn(`DIY Travel could not remove ${key}:`, error)
+  }
+}
+
 class ViewErrorBoundary extends Component {
   constructor(props) {
     super(props)
@@ -222,7 +246,14 @@ class ViewErrorBoundary extends Component {
         <section className="page-section">
           <div className="card view-error-card">
             <Sparkles size={22} />
-            <div><strong>This view hit an unexpected data issue.</strong><span>Your trip data is still saved. Refresh the page or edit the affected stop in Plan; the rest of the app remains available.</span></div>
+            <div className="view-error-copy">
+              <strong>This section ran into a display problem.</strong>
+              <span>Your trip data is still saved. You can retry this section or return to your trip list without losing your plan.</span>
+              <div className="view-error-actions">
+                <button type="button" className="primary-button" onClick={() => this.setState({ error: null })}>Try again</button>
+                {this.props.onBack && <button type="button" className="ghost-button" onClick={this.props.onBack}>Back to trips</button>}
+              </div>
+            </div>
           </div>
         </section>
       )
@@ -301,6 +332,7 @@ function normalizeData(saved) {
       ...base.budget,
       ...(saved.budget || {}),
       dailyTargets: { ...(base.budget.dailyTargets || {}), ...((saved.budget || {}).dailyTargets || {}) },
+      discounts: Array.isArray((saved.budget || {}).discounts) ? (saved.budget || {}).discounts : [],
     },
     shopping: (saved.shopping || base.shopping).map((item) => ({ purchaseDate: '', location: '', ...item })),
     packingBags: (() => {
@@ -383,7 +415,7 @@ function createBlankTripData() {
     packingBags: [{ id: 'bag-main', name: 'Main bag' }],
     packing: [],
     expenses: [],
-    budget: { total: 0, shopping: 0, spentOther: 0, dailyTargets: {} },
+    budget: { total: 0, shopping: 0, spentOther: 0, dailyTargets: {}, discounts: [] },
   })
 }
 
@@ -427,6 +459,160 @@ function loadInitialWorkspace() {
 
 function formatMoney(value, currency) {
   return `${currency}${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+}
+
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function reportRows(data) {
+  const trip = data?.trip || {}
+  const arrival = trip.arrival || {}
+  const departure = trip.departure || {}
+  const discounts = Array.isArray(data?.budget?.discounts) ? data.budget.discounts : []
+  const rows = [
+    ['DIY Travel report'],
+    ['Trip', trip.name || 'Untitled Trip'],
+    ['Destination', trip.city || ''],
+    ['Travel dates', `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}`],
+    ['Currency', trip.currency || ''],
+    [],
+    ['FLIGHTS'],
+    ['Type', 'Flight no.', 'Airline', 'From / To', 'Airport', 'Time', 'Terminal', 'Gate'],
+    ['Arrival', arrival.flightNumber || '', arrival.airline || '', arrival.from || '', arrival.location || '', arrival.time || '', arrival.terminal || '', arrival.gate || ''],
+    ['Departure', departure.flightNumber || '', departure.airline || '', departure.to || '', departure.location || '', departure.time || '', departure.terminal || '', departure.gate || ''],
+    [],
+    ['STAYS / BASES'],
+    ['Name', 'Address', 'Check-in', 'Check-out'],
+    ...(trip.hotels || []).map((hotel) => [hotel.name || '', hotel.address || '', `${formatDate(hotel.checkInDate)} ${hotel.checkIn || ''}`.trim(), `${formatDate(hotel.checkOutDate)} ${hotel.checkOut || ''}`.trim()]),
+    [],
+    ['PLACES'],
+    ['Date', 'Time', 'Place', 'Category', 'Duration', 'Hours', 'Address', 'Priority'],
+    ...[...(data?.places || [])]
+      .sort((a, b) => `${a.visitDate || ''}-${a.plannedStart || a.suggestedStart || ''}`.localeCompare(`${b.visitDate || ''}-${b.plannedStart || b.suggestedStart || ''}`))
+      .map((place) => [formatDate(place.visitDate), place.plannedStart || place.suggestedStart || '', place.name || '', place.category || '', `${place.duration || 0} min`, place.hoursSummary || [place.open, place.close].filter(Boolean).join(' — '), place.address || '', place.priority || '']),
+    [],
+    ['EXPENSES'],
+    ['Date', 'Category', 'Description', 'Amount'],
+    ...(data?.expenses || []).map((item) => [formatDate(item.date), item.category || '', item.note || '', formatMoney(item.amount, trip.currency || '')]),
+    [],
+    ['DISCOUNTS / SAVINGS'],
+    ['Date', 'Discount', 'Code', 'Savings'],
+    ...discounts.map((item) => [formatDate(item.date), item.label || '', item.code || '', formatMoney(item.amount, trip.currency || '')]),
+    [],
+    ['THINGS TO BUY'],
+    ['Item', 'Location', 'Planned', 'Actual', 'Status'],
+    ...(data?.shopping || []).map((item) => [item.name || '', item.location || '', formatMoney(Number(item.planned || 0) * Number(item.quantity || 1), trip.currency || ''), formatMoney(item.actual || 0, trip.currency || ''), item.bought ? 'Bought' : 'Planned']),
+    [],
+    ['PACKING'],
+    ['Bag', 'Item', 'Packed'],
+    ...(data?.packing || []).map((item) => {
+      const bag = (data?.packingBags || []).find((candidate) => candidate.id === item.bagId)
+      return [bag?.name || 'Bag', item.name || '', item.checked ? 'Yes' : 'No']
+    }),
+  ]
+  return rows
+}
+
+function downloadTextFile(filename, contents, mimeType) {
+  const blob = new Blob([contents], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 500)
+}
+
+function safeReportFilename(name, extension) {
+  const safe = String(name || 'DIY-Travel')
+    .trim()
+    .replace(/[^a-z0-9-_]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'DIY-Travel'
+  return `${safe}.${extension}`
+}
+
+function exportTripCsv(data) {
+  const csv = reportRows(data)
+    .map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(','))
+    .join('\r\n')
+  downloadTextFile(safeReportFilename(data?.trip?.name, 'csv'), `\ufeff${csv}`, 'text/csv;charset=utf-8')
+}
+
+function exportTripExcel(data) {
+  const rows = reportRows(data)
+  const table = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse}td{border:1px solid #ddd;padding:7px;vertical-align:top}</style></head><body><table>${table}</table></body></html>`
+  downloadTextFile(safeReportFilename(data?.trip?.name, 'xls'), `\ufeff${html}`, 'application/vnd.ms-excel;charset=utf-8')
+}
+
+function exportTripPdf(data, onError = () => {}) {
+  const rows = reportRows(data)
+  const table = rows.map((row) => {
+    if (!row.length) return '<tr class="spacer"><td>&nbsp;</td></tr>'
+    if (row.length === 1) return `<tr class="section"><th colspan="8">${escapeHtml(row[0])}</th></tr>`
+    return `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`
+  }).join('')
+
+  const printableHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(data?.trip?.name || 'DIY Travel')} report</title><style>
+    @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;color:#182128;margin:0;font-size:10pt}h1{font-size:22pt;margin:0 0 4px}.meta{color:#66726f;margin:0 0 18px}.brand{color:#166a58;font-weight:800;font-size:9pt;letter-spacing:.08em;text-transform:uppercase}table{width:100%;border-collapse:collapse;table-layout:auto}td,th{border:1px solid #dfe5e2;padding:6px 7px;text-align:left;vertical-align:top;overflow-wrap:anywhere}.section th{background:#eef7f4;color:#0f4f42;font-size:11pt;padding:9px}.spacer td{border:0;height:9px}.note{margin-top:14px;color:#6b7773;font-size:8.5pt}@media print{.note{display:none}}</style></head><body><div class="brand">DIY Travel</div><h1>${escapeHtml(data?.trip?.name || 'Trip report')}</h1><p class="meta">${escapeHtml(data?.trip?.city || '')} · ${escapeHtml(formatDate(data?.trip?.startDate))} — ${escapeHtml(formatDate(data?.trip?.endDate))}</p><table>${table}</table><p class="note">Choose “Save as PDF” in the print dialog.</p></body></html>`
+
+  // Print from a temporary hidden frame so mobile/desktop browsers do not need to allow pop-ups.
+  const frame = document.createElement('iframe')
+  frame.setAttribute('title', 'DIY Travel PDF report')
+  frame.setAttribute('aria-hidden', 'true')
+  Object.assign(frame.style, {
+    position: 'fixed',
+    right: '0',
+    bottom: '0',
+    width: '1px',
+    height: '1px',
+    border: '0',
+    opacity: '0',
+    pointerEvents: 'none',
+  })
+  document.body.appendChild(frame)
+
+  const frameWindow = frame.contentWindow
+  const frameDocument = frame.contentDocument || frameWindow?.document
+  if (!frameWindow || !frameDocument) {
+    frame.remove()
+    onError('The PDF report could not be prepared in this browser. Try CSV or Excel instead.')
+    return
+  }
+
+  let cleanedUp = false
+  const cleanup = () => {
+    if (cleanedUp) return
+    cleanedUp = true
+    frame.remove()
+  }
+
+  const printReport = () => {
+    try {
+      frameWindow.focus()
+      frameWindow.print()
+      frameWindow.addEventListener?.('afterprint', cleanup, { once: true })
+      setTimeout(cleanup, 30000)
+    } catch (error) {
+      console.error('PDF print failed:', error)
+      cleanup()
+      onError('The print dialog could not open. Try CSV or Excel instead.')
+    }
+  }
+
+  frameDocument.open()
+  frameDocument.write(printableHtml)
+  frameDocument.close()
+  setTimeout(printReport, 180)
 }
 
 function formatDate(date) {
@@ -541,7 +727,7 @@ function createBlankPlaceForm(defaultDate = '') {
     priority: 'High', visitDate: defaultDate, plannedStart: '', suggestedStart: '', timeSource: 'suggested',
     address: '', googlePlaceId: '', latitude: null, longitude: null, googleMapsURI: '', websiteURI: '',
     primaryType: '', primaryTypeDisplayName: '', regularOpeningHours: null, currentOpeningHours: null,
-    hoursSummary: '', hoursStatus: 'unavailable', source: 'manual',
+    hoursSummary: '', hoursStatus: 'unavailable', source: 'manual', notes: '',
   }
 }
 
@@ -579,6 +765,45 @@ function minutesToClock(value) {
   const hour = Math.floor(normalized / 60)
   const minute = normalized % 60
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function formatTravelMinutes(minutes) {
+  const value = Math.max(0, Math.round(Number(minutes) || 0))
+  if (value < 60) return `${value} min`
+  const hours = Math.floor(value / 60)
+  const rest = value % 60
+  return rest ? `${hours} hr ${rest} min` : `${hours} hr`
+}
+
+function formatNearbyDistance(meters) {
+  const value = Number(meters)
+  if (!Number.isFinite(value) || value < 0) return 'Nearby'
+  if (value < 1000) return `${Math.round(value)} m`
+  const km = value / 1000
+  return `${km.toFixed(km >= 10 ? 0 : 1)} km`
+}
+
+function normalizedPlaceText(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function placeIdentityKeys(place) {
+  if (!place) return []
+  const keys = []
+  if (place.googlePlaceId) keys.push(`id:${place.googlePlaceId}`)
+  const name = normalizedPlaceText(place.name || place.location)
+  const address = normalizedPlaceText(place.address)
+  if (name && address) keys.push(`name-address:${name}|${address}`)
+  const lat = Number(place.latitude)
+  const lng = Number(place.longitude)
+  if (Number.isFinite(lat) && Number.isFinite(lng)) keys.push(`coord:${lat.toFixed(5)},${lng.toFixed(5)}`)
+  return keys
+}
+
+function isPlaceAlreadySaved(candidate, savedPlaces = []) {
+  const candidateKeys = new Set(placeIdentityKeys(candidate))
+  if (!candidateKeys.size) return false
+  return savedPlaces.some((saved) => placeIdentityKeys(saved).some((key) => candidateKeys.has(key)))
 }
 
 function haversineKm(a, b) {
@@ -650,10 +875,10 @@ function dayArrangementPreference(data, date) {
 
 function arrangementLabel(pref) {
   const strategy = pref?.strategy === 'nearest' ? 'Nearest first' : pref?.strategy === 'closing' ? 'Earlier closing first' : 'Balanced'
-  if (pref?.endMode === 'stay') return `${strategy} · finish near stay/base`
+  if (pref?.endMode === 'stay') return `${strategy} · return to stay/base`
   if (pref?.endMode === 'shopping') return `${strategy} · shopping last`
-  if (pref?.endMode === 'place') return `${strategy} · chosen endpoint last`
-  return strategy
+  if (pref?.endMode === 'place') return `${strategy} · chosen final place`
+  return `${strategy} · end at final destination`
 }
 
 function applySmartSuggestionsForDate(data, date) {
@@ -848,6 +1073,19 @@ function buildDayItems(data, date) {
     })
   }
 
+  if (arrival?.date === date && startPreference === 'arrival_stay' && isMapped(stay)) {
+    const airportReady = addMinutes(arrival.time || '09:00', Number(arrival.transferBufferMinutes || 0))
+    const transferToStay = isMapped(arrival) ? estimateTransferMinutes(arrival, stay) : { minutes: 15 }
+    const stayArrivalTime = addMinutes(airportReady, transferToStay.minutes)
+    items.push({
+      key: `arrival-stay-${stay.id || date}`, kind: 'stay', start: stayArrivalTime, end: '',
+      title: `Stay/base · ${stay.name || 'Accommodation'}`,
+      subtitle: stay.address || 'Stay/base',
+      detail: `First stop after the airport${stay.checkIn ? ` · check-in from ${stay.checkIn}` : ''}`,
+      mapUri: stay.googleMapsURI || '', locationData: stay, sort: stayArrivalTime || '00:01',
+    })
+  }
+
   if (startPreference === 'stay' && isMapped(stay)) {
     items.push({
       key: `day-start-stay-${date}`, kind: 'start', start: '09:00', end: '',
@@ -858,7 +1096,7 @@ function buildDayItems(data, date) {
   }
 
   ;(trip.hotels || []).forEach((hotel) => {
-    if (hotel.checkInDate === date && startPreference !== 'stay') {
+    if (hotel.checkInDate === date && startPreference !== 'stay' && !(startPreference === 'arrival_stay' && String(stay?.id) === String(hotel.id))) {
       const arrivesThisDay = arrival?.date === date && arrival.time
       const checkInAvailable = hotel.checkIn || '15:00'
       const arrivalReady = arrivesThisDay ? addMinutes(arrival.time, Number(arrival.transferBufferMinutes || 0)) : ''
@@ -898,6 +1136,7 @@ function buildDayItems(data, date) {
       title: place.name,
       subtitle: `${place.category} · ${place.duration} min${place.priority ? ` · ${place.priority}` : ''}`,
       detail: [hoursCopy, scheduleCopy].filter(Boolean).join(' · '),
+      notes: place.notes || '',
       mapUri: place.googleMapsURI || '', locationData: place,
       sort: effectiveStart || '98:59', suggestedTime: Boolean(schedule.suggested), scheduleWarning: schedule.scheduleWarning || '',
     })
@@ -924,7 +1163,7 @@ function buildDayItems(data, date) {
   return items.sort((a, b) => String(a.sort || '').localeCompare(String(b.sort || '')))
 }
 
-function GooglePlacePicker({ onSelect, title = 'Search Google Maps', placeholder = 'Search Google Maps', compact = false, includedType = '' }) {
+function GooglePlacePicker({ onSelect, placeholder = 'Search place or address…', compact = false, includedType = '' }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [status, setStatus] = useState('idle')
@@ -934,7 +1173,7 @@ function GooglePlacePicker({ onSelect, title = 'Search Google Maps', placeholder
     event?.preventDefault()
     const value = query.trim()
     if (value.length < 2) {
-      setError('Type at least 2 characters first.')
+      setError('Type at least 2 characters.')
       return
     }
     setStatus('searching')
@@ -943,63 +1182,53 @@ function GooglePlacePicker({ onSelect, title = 'Search Google Maps', placeholder
       const places = await searchGooglePlaces(value, { includedType, maxResults: 6 })
       setResults(places)
       setStatus('ready')
-      if (!places.length) setError('No Google Maps matches were found. Try a more specific place name.')
+      if (!places.length) setError('No matches found. Try a more specific name or address.')
     } catch (searchError) {
       console.error('Google Places Text Search failed:', searchError)
       setResults([])
       setStatus('error')
-      const message = searchError?.message || 'Unknown Google Maps error'
-      setError(`Google Maps search failed: ${message}`)
+      setError('Search is unavailable right now. You can still enter the details manually.')
     }
   }
 
   async function choosePlace(place) {
     setStatus('fetching')
     setError('')
+    let selected = place
     try {
-      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : place
-      const selected = detailed || place
-      setQuery(selected.name || query)
-      setResults([])
-      onSelect?.(selected)
-      setStatus('ready')
+      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : null
+      if (detailed) selected = detailed
     } catch (detailsError) {
-      console.error('Google Place Details failed:', detailsError)
-      setStatus('error')
-      setError(`The place was found, but Google details could not be loaded: ${detailsError?.message || 'Unknown error'}`)
+      // The text-search result already contains the name, address and coordinates we need.
+      // Do not block the user when the optional GetPlace/details quota is unavailable.
+      console.warn('Google Place Details unavailable; using search result data instead:', detailsError)
     }
+    setQuery(selected.name || query)
+    setResults([])
+    onSelect?.(selected)
+    setStatus('ready')
   }
 
   return (
-    <div className={`google-picker text-search-picker ${compact ? 'compact' : ''}`}>
-      <div className="google-picker-title"><Search size={15} /><span>{title}</span></div>
-      <div className="google-text-search-row">
-        <div className="custom-autocomplete-wrap">
-          <Search className="custom-search-icon" size={18} />
-          <input
-            className="custom-google-input"
-            value={query}
-            placeholder={placeholder}
-            autoComplete="off"
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                event.stopPropagation()
-                runSearch()
-              }
-            }}
-          />
-        </div>
-        <button
-          type="button"
-          className="secondary-button google-search-button"
-          disabled={status === 'searching'}
-          onClick={() => runSearch()}
-        >
-          {status === 'searching' ? <LoaderCircle className="google-search-spinner-inline" size={16} /> : <Search size={16} />}
-          Search
-        </button>
+    <div className={`google-picker text-search-picker simplified-search ${compact ? 'compact' : ''}`}>
+      <div className="custom-autocomplete-wrap">
+        <Search className="custom-search-icon" size={18} />
+        <input
+          className="custom-google-input"
+          value={query}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          autoComplete="off"
+          onChange={(event) => { setQuery(event.target.value); setResults([]); setError('') }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.stopPropagation()
+              runSearch()
+            }
+          }}
+        />
+        {(status === 'searching' || status === 'fetching') && <LoaderCircle className="google-search-spinner" size={17} />}
       </div>
       {results.length > 0 && (
         <div className="google-text-results" role="listbox">
@@ -1011,14 +1240,79 @@ function GooglePlacePicker({ onSelect, title = 'Search Google Maps', placeholder
               onClick={() => choosePlace(place)}
             >
               <MapPin size={16} />
-              <span><strong>{place.name || 'Google Maps result'}</strong><small>{place.address || 'Address unavailable'}</small></span>
+              <span><strong>{place.name || 'Place result'}</strong><small>{place.address || 'Address unavailable'}</small></span>
             </button>
           ))}
-          <div className="google-suggestions-footer">Place data powered by Google Maps</div>
+          <div className="google-suggestions-footer maps-attribution" aria-label="Google Maps attribution">Google Maps</div>
         </div>
       )}
       {error && <div className="google-picker-error">{error}</div>}
-      {!compact && <span className="google-attribution">Google Maps · demo mode</span>}
+    </div>
+  )
+}
+
+function TimelineLegSummary({ origin, destination, date, time, utcOffsetMinutes }) {
+  const [status, setStatus] = useState('idle')
+  const [transitOptions, setTransitOptions] = useState([])
+  const distanceKm = haversineKm(origin, destination)
+  if (distanceKm == null) return null
+
+  const walkMinutes = Math.max(2, Math.round((distanceKm / 4.7) * 60))
+  const driveMinutes = Math.max(3, Math.round((distanceKm / 28) * 60 + 2))
+
+  async function loadTransit() {
+    if (status === 'loading') return
+    setStatus('loading')
+    try {
+      const departureTime = localDateTimeToUtc(date, time, utcOffsetMinutes, 0)
+      const result = await getRouteComparison({ origin, destination, departureTime })
+      setTransitOptions(result.filter((option) => ['BUS', 'RAIL', 'FERRY'].includes(option.mode) && option.route))
+      setStatus('ready')
+    } catch (error) {
+      console.warn('Inline transit comparison unavailable:', error)
+      setTransitOptions([])
+      setStatus('unavailable')
+    }
+  }
+
+  return (
+    <div className="timeline-leg-summary">
+      <div className="timeline-leg-destination"><Navigation size={13} /><span>Next stop · {distanceKm.toFixed(1)} km</span></div>
+
+      <div className="timeline-leg-options timeline-leg-options-desktop">
+        <span><Footprints size={13} /> Walk ≈ {formatTravelMinutes(walkMinutes)}</span>
+        <span><Car size={13} /> Drive ≈ {formatTravelMinutes(driveMinutes)}</span>
+        {status === 'idle' && <button type="button" onClick={loadTransit}><TrainFront size={13} /> Check transit</button>}
+        {status === 'loading' && <span><LoaderCircle className="spin" size={13} /> Checking transit…</span>}
+        {status === 'ready' && transitOptions.map((option) => <span key={option.mode}>{transportIcon(option.mode, 13)} {modeLabel(option.mode)} {option.minutes ? `≈ ${formatTravelMinutes(option.minutes)}` : ''}</span>)}
+        {status === 'ready' && !transitOptions.length && <span>Transit not available</span>}
+        {status === 'unavailable' && <button type="button" onClick={loadTransit}><TrainFront size={13} /> Retry transit</button>}
+      </div>
+
+      <details
+        className="timeline-leg-mobile-dropdown"
+        onToggle={(event) => {
+          if (event.currentTarget.open && status === 'idle') loadTransit()
+        }}
+      >
+        <summary>
+          <span><Navigation size={14} /> Travel options</span>
+          <ChevronDown size={15} />
+        </summary>
+        <div className="timeline-leg-mobile-menu">
+          <div className="timeline-leg-mobile-option"><span><Footprints size={15} /> Walk</span><strong>≈ {formatTravelMinutes(walkMinutes)}</strong></div>
+          <div className="timeline-leg-mobile-option"><span><Car size={15} /> Drive / taxi</span><strong>≈ {formatTravelMinutes(driveMinutes)}</strong></div>
+          {status === 'loading' && <div className="timeline-leg-mobile-option muted"><span><LoaderCircle className="spin" size={15} /> Public transit</span><strong>Checking…</strong></div>}
+          {status === 'ready' && transitOptions.map((option) => (
+            <div className="timeline-leg-mobile-option" key={`mobile-${option.mode}`}>
+              <span>{transportIcon(option.mode, 15)} {modeLabel(option.mode)}</span>
+              <strong>{option.minutes ? `≈ ${formatTravelMinutes(option.minutes)}` : 'Available'}</strong>
+            </div>
+          ))}
+          {status === 'ready' && !transitOptions.length && <div className="timeline-leg-mobile-option muted"><span><TrainFront size={15} /> Public transit</span><strong>Not available</strong></div>}
+          {status === 'unavailable' && <button type="button" className="timeline-leg-mobile-retry" onClick={loadTransit}><TrainFront size={15} /> Retry transit schedules</button>}
+        </div>
+      </details>
     </div>
   )
 }
@@ -1036,7 +1330,7 @@ function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
   async function runSearch() {
     const searchValue = query.trim()
     if (searchValue.length < 2) {
-      setError('Enter an airport name or IATA code first.')
+      setError('Enter an airport name or IATA code.')
       return
     }
     setStatus('searching')
@@ -1045,30 +1339,31 @@ function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
       const matches = await searchGooglePlaces(searchValue, { includedType: 'airport', maxResults: 5 })
       setResults(matches)
       setStatus('ready')
-      if (!matches.length) setError('No matching airport was found. You can still keep the airport name manually.')
+      if (!matches.length) setError('No matching airport found. You can keep the airport name manually.')
     } catch (searchError) {
       console.error('Airport search failed:', searchError)
       setResults([])
       setStatus('error')
-      setError(`Airport search failed: ${searchError?.message || 'Unknown Google Maps error'}`)
+      setError('Airport search is unavailable right now. You can keep the airport name manually.')
     }
   }
 
   async function chooseAirport(place) {
     setStatus('fetching')
     setError('')
+    let selected = place
     try {
-      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : place
-      const selected = detailed || place
-      setQuery(selected.name || query)
-      setResults([])
-      onPlaceSelect?.(selected)
-      setStatus('ready')
+      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : null
+      if (detailed) selected = detailed
     } catch (detailsError) {
-      console.error('Airport details failed:', detailsError)
-      setStatus('error')
-      setError(`Airport found, but its map details could not be loaded: ${detailsError?.message || 'Unknown error'}`)
+      // Airport search results already include enough map data to save the airport.
+      // Keep the selection usable even when GetPlace/details requests are quota-limited.
+      console.warn('Airport details unavailable; using search result data instead:', detailsError)
     }
+    setQuery(selected.name || query)
+    setResults([])
+    onPlaceSelect?.(selected)
+    setStatus('ready')
   }
 
   function changeAirportName(nextValue) {
@@ -1086,11 +1381,11 @@ function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
     <div className="manual-flight-airport-field">
       <label>
         <span>{title} airport</span>
-        <div className="airport-field-search">
-          <Search size={18} />
+        <div className={`airport-field-search simplified-airport-search ${isMapped(value) ? 'is-selected' : ''}`}>
+          <Search size={18} aria-label="Search airport" />
           <input
             value={query}
-            placeholder="Search airport name or IATA code"
+            placeholder="Airport name or IATA code"
             autoComplete="off"
             onChange={(e) => changeAirportName(e.target.value)}
             onKeyDown={(e) => {
@@ -1100,10 +1395,7 @@ function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
               }
             }}
           />
-          <button type="button" className="airport-field-search-button" onClick={runSearch} disabled={status === 'searching' || status === 'fetching'}>
-            {status === 'searching' || status === 'fetching' ? <LoaderCircle size={16} /> : <Search size={16} />}
-            <span>Search</span>
-          </button>
+          {(status === 'searching' || status === 'fetching') && <LoaderCircle className="airport-search-spinner" size={17} />}
         </div>
       </label>
 
@@ -1125,9 +1417,9 @@ function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
           <MapPin size={16} />
           <div>
             <strong>{value.location || 'Airport'}</strong>
-            <span>{value.address || 'Address will appear after selecting a Google Maps result.'}</span>
+            <span>{value.address || 'Select a search result to save the address for routing.'}</span>
           </div>
-          {value.googleMapsURI && <a href={value.googleMapsURI} target="_blank" rel="noreferrer" title="Open airport in Google Maps"><ExternalLink size={15} /></a>}
+          {value.googleMapsURI && <a href={value.googleMapsURI} target="_blank" rel="noreferrer" title="Open map"><ExternalLink size={15} /></a>}
         </div>
       )}
     </div>
@@ -1170,6 +1462,20 @@ function googleDirectionsUrl(origin, destination, travelMode = 'walking') {
   return `https://www.google.com/maps/dir/?${params.toString()}`
 }
 
+function googlePlaceMapUrl(place) {
+  if (!place) return ''
+  if (place.googleMapsURI) return place.googleMapsURI
+  const lat = Number(place.latitude)
+  const lng = Number(place.longitude)
+  const query = Number.isFinite(lat) && Number.isFinite(lng)
+    ? `${lat},${lng}`
+    : [place.name || place.location, place.address].filter(Boolean).join(' ')
+  if (!query) return ''
+  const params = new URLSearchParams({ api: '1', query })
+  if (place.googlePlaceId) params.set('query_place_id', place.googlePlaceId)
+  return `https://www.google.com/maps/search/?${params.toString()}`
+}
+
 function transportIcon(mode, size = 18) {
   if (mode === 'BUS') return <BusFront size={size} />
   if (mode === 'RAIL') return <TrainFront size={size} />
@@ -1190,7 +1496,7 @@ function transitUnavailableCopy(option) {
   if (option?.availability === 'providers-unavailable' || option?.availability === 'schedule-unavailable') {
     return {
       title: 'Schedule unavailable',
-      detail: 'We could not reach a timetable source for this leg right now.',
+      detail: 'Schedule details are unavailable for this leg right now.',
     }
   }
   return {
@@ -1368,6 +1674,7 @@ function InAppRouteRecommendations({ origin, destination, date, time, utcOffsetM
                   type="button"
                   key={option.mode}
                   className={`route-option ${isRecommended ? 'recommended' : ''} ${!route ? 'unavailable' : ''} ${expandedMode === option.mode ? 'selected' : ''}`}
+                  aria-pressed={Boolean(route && expandedMode === option.mode)}
                   onClick={() => route && setExpandedMode(option.mode)}
                   disabled={!route}
                 >
@@ -1393,15 +1700,13 @@ function InAppRouteRecommendations({ origin, destination, date, time, utcOffsetM
           {transitUnavailable && regionalSource && (
             <div className="regional-transit-fallback">
               <div className="regional-transit-copy">
-                <span className="regional-transit-kicker">Regional schedule backup</span>
-                <strong>{regionalSource.title}</strong>
-                <span>{regionalSource.description}</span>
+                <span className="regional-transit-kicker">Local schedule option</span>
+                <strong>Check the local timetable</strong>
+                <span>Detailed public-transport routing is unavailable for this leg. You can still check the official local schedule.</span>
               </div>
               <div className="regional-transit-actions">
-                <a className="secondary-button" href={regionalSource.actionUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> {regionalSource.actionLabel}</a>
-                <a className="ghost-button" href={regionalSource.sourceUrl} target="_blank" rel="noreferrer">{regionalSource.sourceLabel}</a>
+                <a className="secondary-button" href={regionalSource.actionUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open schedule</a>
               </div>
-              <small>{regionalSource.caution}</small>
             </div>
           )}
 
@@ -1446,15 +1751,10 @@ function InAppRouteRecommendations({ origin, destination, date, time, utcOffsetM
                       ))}
                     </div>
                   ) : (
-                    <div className="route-simple-copy"><span>The routing provider returned a transit duration, but detailed stop information is unavailable for this route.</span></div>
+                    <div className="route-simple-copy"><span>A transit travel time is available, but detailed stop information is not available for this route.</span></div>
                   )
                 )}
 
-                {route.provider && route.providerKind !== 'local-estimate' && (
-                  <div className="route-provider-note">
-                    <span>Schedule source: <strong>{route.provider}</strong></span>
-                  </div>
-                )}
                 {route.providerKind === 'local-estimate' && (
                   <div className="route-provider-note route-provider-note-estimate"><span>Planning estimate · use the map link for live navigation.</span></div>
                 )}
@@ -1482,17 +1782,35 @@ function MappedLocationSummary({ value, emptyText = 'Not mapped yet' }) {
   )
 }
 
+function loadNavigationState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAVIGATION_STATE_KEY) || '{}')
+    const active = ['plan', 'today', 'budget', 'checklist'].includes(saved.active) ? saved.active : 'plan'
+    return {
+      active,
+      planScreen: saved.planScreen === 'editor' ? 'editor' : 'dashboard',
+      moduleScreen: saved.moduleScreen === 'detail' ? 'detail' : 'dashboard',
+    }
+  } catch {
+    return { active: 'plan', planScreen: 'dashboard', moduleScreen: 'dashboard' }
+  }
+}
+
 function App() {
   const initial = useMemo(() => loadInitialWorkspace(), [])
-  const [active, setActive] = useState('plan')
-  const [planScreen, setPlanScreen] = useState('dashboard')
-  const [moduleScreen, setModuleScreen] = useState('dashboard')
+  const initialNavigation = useMemo(() => loadNavigationState(), [])
+  const [active, setActive] = useState(initialNavigation.active)
+  const [planScreen, setPlanScreen] = useState(initialNavigation.planScreen)
+  const [moduleScreen, setModuleScreen] = useState(initialNavigation.moduleScreen)
   const [plans, setPlans] = useState(initial.plans)
   const [activePlanId, setActivePlanId] = useState(initial.activePlanId)
   const [data, setData] = useState(initial.data)
+  const [pendingDeletePlanId, setPendingDeletePlanId] = useState(null)
+
+  useEffect(() => installButtonDebugger(), [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    safeStorageSet(STORAGE_KEY, JSON.stringify(data))
     setPlans((prev) => prev.map((record) => (
       record.id === activePlanId
         ? { ...record, updatedAt: new Date().toISOString(), data: clone(data) }
@@ -1501,12 +1819,16 @@ function App() {
   }, [data, activePlanId])
 
   useEffect(() => {
-    localStorage.setItem(PLAN_LIBRARY_KEY, JSON.stringify(plans))
+    safeStorageSet(PLAN_LIBRARY_KEY, JSON.stringify(plans))
   }, [plans])
 
   useEffect(() => {
-    localStorage.setItem(ACTIVE_PLAN_KEY, activePlanId)
+    safeStorageSet(ACTIVE_PLAN_KEY, activePlanId)
   }, [activePlanId])
+
+  useEffect(() => {
+    safeStorageSet(NAVIGATION_STATE_KEY, JSON.stringify({ active, planScreen, moduleScreen }))
+  }, [active, planScreen, moduleScreen])
 
   const shoppingSpent = useMemo(() => data.shopping.reduce((sum, item) => sum + Number(item.actual || 0), 0), [data.shopping])
   const shoppingPlanned = useMemo(() => data.shopping.reduce((sum, item) => sum + Number(item.planned || 0) * Number(item.quantity || 1), 0), [data.shopping])
@@ -1552,11 +1874,13 @@ function App() {
   }
 
   function deletePlan(id) {
-    const target = plans.find((item) => item.id === id)
-    if (!target) return
-    const tripName = target.data?.trip?.name || 'this trip'
-    if (!window.confirm(`Delete “${tripName}”? This removes the saved plan from this browser.`)) return
+    if (!plans.some((item) => item.id === id)) return
+    setPendingDeletePlanId(id)
+  }
 
+  function confirmDeletePlan() {
+    const id = pendingDeletePlanId
+    if (!id) return
     const remainingPlans = plans.filter((item) => item.id !== id)
     if (remainingPlans.length) {
       setPlans(remainingPlans)
@@ -1571,6 +1895,7 @@ function App() {
       setActivePlanId(replacement.id)
       setData(clone(replacement.data))
     }
+    setPendingDeletePlanId(null)
     setActive('plan')
     setPlanScreen('dashboard')
   }
@@ -1578,9 +1903,10 @@ function App() {
   function resetDemo() {
     const nextData = clone(demoState)
     const next = planRecord(nextData)
-    localStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(PLAN_LIBRARY_KEY)
-    localStorage.removeItem(ACTIVE_PLAN_KEY)
+    safeStorageRemove(STORAGE_KEY)
+    safeStorageRemove(PLAN_LIBRARY_KEY)
+    safeStorageRemove(ACTIVE_PLAN_KEY)
+    safeStorageRemove(NAVIGATION_STATE_KEY)
     setPlans([next])
     setActivePlanId(next.id)
     setData(nextData)
@@ -1628,7 +1954,7 @@ function App() {
         <nav className="side-nav">
           {navItems.map((item) => {
             const Icon = item.icon
-            return <button key={item.id} className={`nav-button ${active === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)}><Icon size={19} /><span>{item.label}</span></button>
+            return <button type="button" key={item.id} className={`nav-button ${active === item.id ? 'active' : ''}`} onClick={() => navigate(item.id)}><Icon size={19} /><span>{item.label}</span></button>
           })}
         </nav>
         <div className="sidebar-trip-card">
@@ -1637,7 +1963,7 @@ function App() {
           <span>{formatDate(data.trip.startDate)} — {formatDate(data.trip.endDate)}</span>
           <div className="mini-budget-row"><span>Remaining</span><strong>{formatMoney(remaining, data.trip.currency)}</strong></div>
         </div>
-        <button className="reset-button" onClick={resetDemo}><RotateCcw size={16} /> Reset demo data</button>
+        <button type="button" className="reset-button" onClick={resetDemo}><RotateCcw size={16} /> Reset demo data</button>
       </aside>
 
       <main className="main-content">
@@ -1651,27 +1977,49 @@ function App() {
         <nav className="mobile-nav">
           {navItems.map((item) => {
             const Icon = item.icon
-            return <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>
+            return <button type="button" key={item.id} className={active === item.id ? 'active' : ''} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>
           })}
         </nav>
         <div className="page-content">
           {active === 'plan' && planScreen === 'dashboard' && (
-            <TripDashboard
-              plans={plans}
-              activePlanId={activePlanId}
-              onOpen={openPlan}
-              onDuplicate={duplicatePlan}
-              onDelete={deletePlan}
-              onCreate={createPlan}
-            />
+            <ViewErrorBoundary key={`plan-dashboard-${plans.length}`} onBack={goToPlanDashboard}>
+              <TripDashboard
+                plans={plans}
+                activePlanId={activePlanId}
+                onOpen={openPlan}
+                onDuplicate={duplicatePlan}
+                onDelete={deletePlan}
+                onCreate={createPlan}
+              />
+            </ViewErrorBoundary>
           )}
-          {active === 'plan' && planScreen === 'editor' && <PlanView data={data} setData={setData} onBack={goToPlanDashboard} />}
-          {active !== 'plan' && moduleScreen === 'dashboard' && <ModuleTripDashboard moduleId={active} plans={plans} activePlanId={activePlanId} onOpen={openModulePlan} />}
-          {active === 'today' && moduleScreen === 'detail' && <ViewErrorBoundary key={`today-${activePlanId}-${data.trip.startDate}-${data.trip.endDate}`}><TodayView data={data} setData={setData} /></ViewErrorBoundary>}
-          {active === 'budget' && moduleScreen === 'detail' && <BudgetView data={data} setData={setData} shoppingSpent={shoppingSpent} shoppingPlanned={shoppingPlanned} totalSpent={totalSpent} remaining={remaining} expenseSpent={expenseSpent} />}
-          {active === 'checklist' && moduleScreen === 'detail' && <ChecklistView data={data} setData={setData} />}
+          {active === 'plan' && planScreen === 'editor' && (
+            <ViewErrorBoundary key={`plan-${activePlanId}`} onBack={goToPlanDashboard}>
+              <PlanView data={data} setData={setData} onBack={goToPlanDashboard} />
+            </ViewErrorBoundary>
+          )}
+          {active !== 'plan' && moduleScreen === 'dashboard' && (
+            <ViewErrorBoundary key={`${active}-dashboard-${plans.length}`} onBack={goToModuleDashboard}>
+              <ModuleTripDashboard moduleId={active} plans={plans} activePlanId={activePlanId} onOpen={openModulePlan} />
+            </ViewErrorBoundary>
+          )}
+          {active === 'today' && moduleScreen === 'detail' && <ViewErrorBoundary key={`today-${activePlanId}-${data.trip.startDate}-${data.trip.endDate}`} onBack={goToModuleDashboard}><TodayView data={data} setData={setData} /></ViewErrorBoundary>}
+          {active === 'budget' && moduleScreen === 'detail' && <ViewErrorBoundary key={`budget-${activePlanId}`} onBack={goToModuleDashboard}><BudgetView data={data} setData={setData} shoppingSpent={shoppingSpent} shoppingPlanned={shoppingPlanned} totalSpent={totalSpent} remaining={remaining} expenseSpent={expenseSpent} /></ViewErrorBoundary>}
+          {active === 'checklist' && moduleScreen === 'detail' && <ViewErrorBoundary key={`checklist-${activePlanId}`} onBack={goToModuleDashboard}><ChecklistView data={data} setData={setData} /></ViewErrorBoundary>}
         </div>
       </main>
+      <AppDialog
+        open={Boolean(pendingDeletePlanId)}
+        tone="danger"
+        icon={Trash2}
+        title="Delete this trip?"
+        message={`This will remove “${plans.find((item) => item.id === pendingDeletePlanId)?.data?.trip?.name || 'this trip'}” from this browser.`}
+        detail="This action cannot be undone."
+        confirmLabel="Delete trip"
+        cancelLabel="Keep trip"
+        onConfirm={confirmDeletePlan}
+        onCancel={() => setPendingDeletePlanId(null)}
+      />
     </div>
   )
 }
@@ -1701,7 +2049,7 @@ function TopbarTripEditor({ data, setData, onBack, showBack = false }) {
   return (
     <header className="topbar editable-topbar">
       <div className="topbar-title-wrap">
-        {showBack && <button className="topbar-back" title="Back to all trips" onClick={onBack}><ArrowLeft size={18} /></button>}
+        {showBack && <button type="button" className="topbar-back" title="Back to all trips" onClick={onBack}><ArrowLeft size={18} /></button>}
         <div className="topbar-title-copy">
           <span className="eyebrow">{data.trip.city || 'DIY TRIP'}</span>
           {editingTitle ? (
@@ -1714,7 +2062,7 @@ function TopbarTripEditor({ data, setData, onBack, showBack = false }) {
               onKeyDown={(e) => e.key === 'Enter' && setEditingTitle(false)}
             />
           ) : (
-            <button className="topbar-edit-title" onClick={() => setEditingTitle(true)} title="Edit trip title">
+            <button type="button" className="topbar-edit-title" onClick={() => setEditingTitle(true)} title="Edit trip title">
               <h1>{data.trip.name || 'Untitled Trip'}</h1><Pencil size={14} />
             </button>
           )}
@@ -1726,10 +2074,10 @@ function TopbarTripEditor({ data, setData, onBack, showBack = false }) {
           <label>Start<input type="date" value={data.trip.startDate || ''} onChange={(e) => updateDate('startDate', e.target.value)} /></label>
           <span>—</span>
           <label>End<input type="date" value={data.trip.endDate || ''} onChange={(e) => updateDate('endDate', e.target.value)} /></label>
-          <button className="icon-button" title="Done editing dates" onClick={() => setEditingDates(false)}><Check size={16} /></button>
+          <button type="button" className="icon-button" title="Done editing dates" onClick={() => setEditingDates(false)}><Check size={16} /></button>
         </div>
       ) : (
-        <button className="trip-dates editable-trip-dates" onClick={() => setEditingDates(true)} title="Edit trip dates">
+        <button type="button" className="trip-dates editable-trip-dates" onClick={() => setEditingDates(true)} title="Edit trip dates">
           <CalendarDays size={18} /><span>{formatDate(data.trip.startDate)} — {formatDate(data.trip.endDate)}</span><Pencil size={13} />
         </button>
       )}
@@ -1758,7 +2106,7 @@ function TripDashboard({ plans, activePlanId, onOpen, onDuplicate, onDelete, onC
           <h2>Your trips, all in one place.</h2>
           <p>Keep previous itineraries, continue an upcoming plan, or duplicate a trip instead of starting from zero.</p>
         </div>
-        <button className="primary-button" onClick={onCreate}><Plus size={17} /> Create trip</button>
+        <button type="button" className="primary-button" onClick={onCreate}><Plus size={17} /> Create trip</button>
       </div>
 
       {sections.map(([key, title, description]) => (
@@ -1784,9 +2132,9 @@ function TripDashboard({ plans, activePlanId, onOpen, onDuplicate, onDelete, onC
                       <small>{record.data.places?.length || 0} places · {trip.hotels?.length || 0} stays{isActive ? ' · Active' : ''}</small>
                     </div>
                     <div className="trip-library-actions">
-                      <button className="primary-button" onClick={() => onOpen(record.id)}><FolderOpen size={16} /> Open</button>
-                      <button className="ghost-button" onClick={() => onDuplicate(record.id)}><Copy size={16} /> {key === 'past' ? 'Repeat' : 'Duplicate'}</button>
-                      <button className="ghost-button trip-delete-button" onClick={() => onDelete(record.id)}><Trash2 size={16} /> Delete</button>
+                      <button type="button" className="primary-button" onClick={() => onOpen(record.id)}><FolderOpen size={16} /> Open</button>
+                      <button type="button" className="ghost-button" onClick={() => onDuplicate(record.id)}><Copy size={16} /> {key === 'past' ? 'Repeat' : 'Duplicate'}</button>
+                      <button type="button" className="ghost-button trip-delete-button" onClick={() => onDelete(record.id)}><Trash2 size={16} /> Delete</button>
                     </div>
                   </article>
                 )
@@ -1847,11 +2195,25 @@ function ModuleTripDashboard({ moduleId, plans, activePlanId, onOpen }) {
             <article className={`card module-trip-card ${record.id === activePlanId ? 'active-plan' : ''}`} key={record.id}>
               <div className="module-trip-card-head"><div className="trip-library-icon"><Icon size={18} /></div><span className={`trip-state-dot ${status}`} title={status} /></div>
               <div className="module-trip-card-copy"><span className="eyebrow">{trip.city || 'Destination not set'}</span><strong>{trip.name || 'Untitled Trip'}</strong><span><CalendarDays size={13} /> {formatDate(trip.startDate)} — {formatDate(trip.endDate)}</span><small>{summary(record)}</small></div>
-              <button className="primary-button" onClick={() => onOpen(record.id, moduleId)}><FolderOpen size={16} /> {meta.action}</button>
+              <button type="button" className="primary-button" onClick={() => onOpen(record.id, moduleId)}><FolderOpen size={16} /> {meta.action}</button>
             </article>
           )
         })}
       </div>
+    </section>
+  )
+}
+
+function PlanAccordionSection({ id, icon: Icon, title, subtitle, open, onToggle, badge = null, children }) {
+  return (
+    <section id={id} className={`plan-accordion-section ${open ? 'open' : ''}`}>
+      <button type="button" className="plan-accordion-toggle" onClick={onToggle} aria-expanded={open} aria-controls={`${id}-content`}>
+        <span className="plan-accordion-icon"><Icon size={18} /></span>
+        <span className="plan-accordion-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+        {badge}
+        <ChevronDown className="plan-accordion-chevron" size={18} />
+      </button>
+      {open && <div id={`${id}-content`} className="plan-accordion-body">{children}</div>}
     </section>
   )
 }
@@ -1863,11 +2225,15 @@ function PlanView({ data, setData, onBack }) {
   const [editingPlaceId, setEditingPlaceId] = useState(null)
   const [placeDateFilter, setPlaceDateFilter] = useState('all')
   const [placeFormError, setPlaceFormError] = useState('')
+  const [placeMoveDialog, setPlaceMoveDialog] = useState(null)
+  const [openPlanSections, setOpenPlanSections] = useState({ travel: true, flights: false, stays: false, places: false, transport: false })
   const googleConfigured = hasGoogleMapsKey()
 
-  function scrollToPlanSection(id) {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  function togglePlanSection(section) {
+    setOpenPlanSections((prev) => ({ ...prev, [section]: !prev[section] }))
   }
+
+
 
   function directPlaceTimeProblem(place) {
     if (place.hoursStatus === 'closed') return `${place.name || 'This place'} is closed on ${formatDate(place.visitDate)}. Choose another day.`
@@ -1980,6 +2346,9 @@ function PlanView({ data, setData, onBack }) {
         regularOpeningHours: place.regularOpeningHours,
         currentOpeningHours: place.currentOpeningHours,
         utcOffsetMinutes: place.utcOffsetMinutes,
+        photoURI: place.photoURI || '',
+        photoAttributions: place.photoAttributions || [],
+        photoGoogleMapsURI: place.photoGoogleMapsURI || '',
         hoursSummary: hours.summary,
         hoursStatus: hours.status,
         source: 'google',
@@ -2021,6 +2390,32 @@ function PlanView({ data, setData, onBack }) {
     requestAnimationFrame(() => document.querySelector('.place-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 
+  function commitPlace(candidate) {
+    setData((prev) => {
+      const nextData = {
+        ...prev,
+        places: editingPlaceId
+          ? prev.places.map((place) => place.id === editingPlaceId ? { ...place, ...candidate, id: editingPlaceId } : place)
+          : [...prev.places, { ...candidate, id: Date.now() }],
+      }
+      return applyAllSmartSuggestions(nextData)
+    })
+    setPlaceMoveDialog(null)
+    closePlaceForm()
+  }
+
+  function confirmSuggestedPlaceMove() {
+    if (!placeMoveDialog?.candidate || !placeMoveDialog?.nextDay) return
+    const { candidate, nextDay } = placeMoveDialog
+    const movedCandidate = {
+      ...placeWithDateHours(candidate, nextDay.date),
+      plannedStart: '',
+      suggestedStart: nextDay.start,
+      timeSource: 'suggested',
+    }
+    commitPlace(movedCandidate)
+  }
+
   function addPlace(event) {
     event.preventDefault()
     if (!placeForm.name.trim() || !placeForm.visitDate) return
@@ -2035,55 +2430,40 @@ function PlanView({ data, setData, onBack }) {
     const directProblem = directPlaceTimeProblem(normalizedPlace)
     if (directProblem) {
       setPlaceFormError(directProblem)
-      window.alert(directProblem)
       return
     }
 
     const candidateId = editingPlaceId || `candidate-${Date.now()}`
     let candidate = { ...normalizedPlace, id: candidateId }
-    let candidatePlaces = editingPlaceId
+    const candidatePlaces = editingPlaceId
       ? data.places.map((place) => place.id === editingPlaceId ? candidate : place)
       : [...data.places, candidate]
-    let candidateData = { ...data, places: candidatePlaces }
+    const candidateData = { ...data, places: candidatePlaces }
 
     try {
       const schedule = smartPlaceSchedule(candidateData, candidate.visitDate).get(candidateId)
       if (schedule?.scheduleWarning) {
         const nextDay = findNextAvailableDay(candidateData, candidateId, candidate.visitDate)
         if (nextDay) {
-          const move = window.confirm(`${schedule.scheduleWarning}\n\nSuggested alternative: move ${candidate.name} to ${formatDate(nextDay.date)} around ${nextDay.start}.\n\nMove it to that day?`)
-          if (!move) {
-            setPlaceFormError(`${schedule.scheduleWarning} Suggested next day: ${formatDate(nextDay.date)} around ${nextDay.start}.`)
-            return
-          }
-          candidate = { ...placeWithDateHours(candidate, nextDay.date), plannedStart: '', suggestedStart: nextDay.start, timeSource: 'suggested' }
-          candidatePlaces = editingPlaceId
-            ? data.places.map((place) => place.id === editingPlaceId ? candidate : place)
-            : [...data.places, candidate]
-          candidateData = { ...data, places: candidatePlaces }
-        } else {
-          const message = `${schedule.scheduleWarning} No later trip day currently has enough room for this stop.`
-          setPlaceFormError(message)
-          window.alert(message)
+          setPlaceMoveDialog({
+            candidate,
+            nextDay,
+            warning: schedule.scheduleWarning,
+          })
+          setPlaceFormError('')
           return
         }
-      } else if (candidate.timeSource !== 'manual') {
+        setPlaceFormError(`${schedule.scheduleWarning} No later trip day currently has enough room for this stop.`)
+        return
+      }
+      if (candidate.timeSource !== 'manual') {
         candidate = { ...candidate, suggestedStart: schedule?.start || '', plannedStart: '', timeSource: 'suggested' }
       }
     } catch (error) {
       console.warn('Place feasibility check skipped:', error)
     }
 
-    setData((prev) => {
-      const nextData = {
-        ...prev,
-        places: editingPlaceId
-          ? prev.places.map((place) => place.id === editingPlaceId ? { ...place, ...candidate, id: editingPlaceId } : place)
-          : [...prev.places, { ...candidate, id: Date.now() }],
-      }
-      return applyAllSmartSuggestions(nextData)
-    })
-    closePlaceForm()
+    commitPlace(candidate)
   }
 
   function deletePlace(id) {
@@ -2112,25 +2492,16 @@ function PlanView({ data, setData, onBack }) {
 
   return (
     <section className="page-section plan-editor-page">
-      <div className="hero-card">
+      <div className="hero-card plan-hero-card">
         <div>
           <span className="eyebrow">PLAN YOUR TRIP</span>
-          <h2>Build the travel details first, then let Today turn them into a usable day plan.</h2>
-          <p>Use the section bar to jump between travel dates, flights, stays or home base, places, and transportation.</p>
+          <h2>Plan the essentials. Today handles the day-by-day flow.</h2>
+          <p>Set your dates, flights, stay/base, places, and transport preferences once.</p>
         </div>
-        <div className="hero-icon"><Sparkles size={30} /></div>
+        <TripExportMenu data={data} />
       </div>
 
-      <nav className="plan-section-nav" aria-label="Plan sections">
-        <button type="button" onClick={() => scrollToPlanSection('plan-travel')}><MapPin size={15} /><span>Travel</span></button>
-        <button type="button" onClick={() => scrollToPlanSection('plan-flights')}><Plane size={15} /><span>Flights</span></button>
-        <button type="button" onClick={() => scrollToPlanSection('plan-stays')}><BedDouble size={15} /><span>Stay / base</span></button>
-        <button type="button" onClick={() => scrollToPlanSection('plan-transport')}><TrainFront size={15} /><span>Transportation</span></button>
-        <button type="button" onClick={() => scrollToPlanSection('plan-places')}><MapIcon size={15} /><span>Places</span></button>
-      </nav>
-
-      <div id="plan-travel" className="plan-scroll-anchor" />
-      <div className="section-heading"><div><span className="eyebrow">TRIP DETAILS</span><h3>Travel window</h3><p>These dates are linked to your arrival and departure below.</p></div></div>
+      <PlanAccordionSection id="plan-travel" icon={MapPin} title="Travel window" subtitle="Destination and trip dates" open={openPlanSections.travel} onToggle={() => togglePlanSection('travel')}>
       <div className="details-grid travel-window-grid">
         <EditableCard icon={MapPin} title="Destination">
           <label>City / Country<input value={data.trip.city} onChange={(e) => updateTripField('city', e.target.value)} /></label>
@@ -2139,14 +2510,10 @@ function PlanView({ data, setData, onBack }) {
             <label>End<input type="date" value={data.trip.endDate} onChange={(e) => updateTravelWindow('endDate', e.target.value)} /></label>
           </div>
         </EditableCard>
-        <div className="card linked-window-card">
-          <CalendarDays size={20} />
-          <div><span className="eyebrow">TRIP DATES</span><strong>{formatDate(data.trip.startDate)} → {formatDate(data.trip.endDate)}</strong><p>These dates drive Today, place filters, daily budgets, hotel dates, and checklist planning.</p></div>
-        </div>
       </div>
+      </PlanAccordionSection>
 
-      <div id="plan-flights" className="plan-scroll-anchor" />
-      <div className="section-heading section-heading-row"><div><span className="eyebrow">ARRIVAL & DEPARTURE</span><h3>Flight details</h3><p>Enter your flight details manually for now. Automatic flight lookup, delay tracking, gates, and live status are planned for a future update.</p></div><span className="coming-soon-pill">Automatic flight tracking · Coming soon</span></div>
+      <PlanAccordionSection id="plan-flights" icon={Plane} title="Flights" subtitle="Arrival and departure details" open={openPlanSections.flights} onToggle={() => togglePlanSection('flights')} badge={<span className="coming-soon-pill small">Tracking soon</span>}>
       <div className="flight-grid">
         <TravelEndpointCard
           title="Arrival" value={data.trip.arrival} directionLabel="Coming from"
@@ -2159,24 +2526,21 @@ function PlanView({ data, setData, onBack }) {
           onPlaceSelect={(place) => mapEndpoint('departure', place)}
         />
       </div>
+      </PlanAccordionSection>
 
-      <div id="plan-stays" className="plan-scroll-anchor" />
-      <div className="section-heading section-heading-row">
-        <div><span className="eyebrow">STAY / HOME BASE · OPTIONAL</span><h3>Where are you staying?</h3><p>Add a hotel, hostel, Airbnb, relative's house, or simply an address. Skip this section if you do not need a stay/base for routing.</p></div>
-        <button className="primary-button" onClick={addHotel}><Plus size={17} /> Add stay / address</button>
-      </div>
-
+      <PlanAccordionSection id="plan-stays" icon={BedDouble} title="Stay / base" subtitle="Optional hotel, home, Airbnb, or address" open={openPlanSections.stays} onToggle={() => togglePlanSection('stays')}>
+      <div className="plan-accordion-actions"><button type="button" className="primary-button" onClick={addHotel}><Plus size={17} /> Add stay</button></div>
       <div className="hotel-list">
         {data.trip.hotels.map((hotel, index) => (
           <div className="card hotel-card" key={hotel.id}>
             <div className="hotel-card-header">
               <div><div className="card-icon"><Hotel size={18} /></div><div><span className="eyebrow">STAY / BASE {index + 1}</span><strong>{hotel.name || 'Add a stay or address'}</strong></div></div>
-              <button className="icon-button danger" title="Remove hotel" onClick={() => deleteHotel(hotel.id)}><Trash2 size={17} /></button>
+              <button type="button" className="icon-button danger" title="Remove hotel" onClick={() => deleteHotel(hotel.id)}><Trash2 size={17} /></button>
             </div>
-            <GooglePlacePicker compact title="Find stay or address on Google Maps" placeholder="Hotel, Airbnb, house, street address…" onSelect={(place) => mapHotel(hotel.id, place)} />
-            <MappedLocationSummary value={hotel} emptyText="Optional: search above to map this stay/base for routing" />
+            <GooglePlacePicker compact placeholder="Search hotel or address…" onSelect={(place) => mapHotel(hotel.id, place)} />
+            <MappedLocationSummary value={hotel} emptyText="Not mapped yet · optional for routing" />
             <div className="hotel-fields">
-              <label>Stay / base name<input placeholder="Hotel, friend's house, apartment…" value={hotel.name} onChange={(e) => updateHotel(hotel.id, { name: e.target.value })} /></label>
+              <label className="hotel-name-field">Stay / base name<input placeholder="Hotel, friend's house, apartment…" value={hotel.name} onChange={(e) => updateHotel(hotel.id, { name: e.target.value })} /></label>
               <label className="hotel-address-field">Address<input placeholder="Optional manual address" value={hotel.address || ''} onChange={(e) => updateHotel(hotel.id, { address: e.target.value, source: hotel.googlePlaceId ? hotel.source : 'manual' })} /></label>
               <label>Check-in date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={hotel.checkInDate || ''} onChange={(e) => updateHotel(hotel.id, { checkInDate: e.target.value })} /></label>
               <label>Check-in time<input type="time" value={hotel.checkIn || ''} onChange={(e) => updateHotel(hotel.id, { checkIn: e.target.value })} /></label>
@@ -2186,13 +2550,74 @@ function PlanView({ data, setData, onBack }) {
           </div>
         ))}
       </div>
+      </PlanAccordionSection>
 
-      <div id="plan-transport" className={`card transfer-ready-card plan-scroll-anchor ${transferReady ? 'ready' : ''}`}>
+      <PlanAccordionSection id="plan-places" icon={MapIcon} title="Places" subtitle={`${data.places.length} saved stop${data.places.length === 1 ? '' : 's'} · filter, edit, or add more`} open={openPlanSections.places} onToggle={() => togglePlanSection('places')}>
+        <div className="plan-accordion-actions places-heading-actions">
+          <label className="place-date-filter"><CalendarDays size={15} /><select value={placeDateFilter} onChange={(e) => setPlaceDateFilter(e.target.value)}><option value="all">All dates</option>{tripDatesForPlaces.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</select></label>
+          <button type="button" className="primary-button" onClick={() => { if (showPlaceForm && !editingPlaceId) closePlaceForm(); else { setEditingPlaceId(null); setSelectedGooglePlace(null); setPlaceForm(createBlankPlaceForm(data.trip.startDate)); setShowPlaceForm(true) } }}><Plus size={17} /> Add place</button>
+        </div>
+
+      {showPlaceForm && (
+        <form className="inline-form place-form card" onSubmit={addPlace}>
+          <div className="form-full-width edit-place-form-title"><div><span className="eyebrow">{editingPlaceId ? 'EDIT PLACE' : 'ADD PLACE'}</span><strong>{editingPlaceId ? 'Update this stop' : 'Add a new stop'}</strong></div>{editingPlaceId && <button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel edit</button>}</div>
+          <div className="form-full-width"><GooglePlacePicker onSelect={selectGooglePlace} placeholder="Search place or address…" /></div>
+          {!googleConfigured && <div className="form-full-width google-setup-warning">The app cannot see a Google demo key yet. Confirm <strong>.env.local</strong> contains <strong>VITE_GOOGLE_MAPS_API_KEY</strong>, then restart Vite.</div>}
+          {selectedGooglePlace && (
+            <div className="selected-place-preview form-full-width">
+              <div className="selected-place-heading"><div className="place-pin"><MapPin size={19} /></div><div><span className="eyebrow">SELECTED PLACE</span><strong>{selectedGooglePlace.name}</strong><span>{selectedGooglePlace.address || 'Address unavailable'}</span></div></div>
+              <div className="selected-place-meta">
+                <span><Clock3 size={14} />{hoursForDate(selectedGooglePlace.regularOpeningHours, placeForm.visitDate).summary}</span>
+                {selectedGooglePlace.primaryTypeDisplayName && <span>{selectedGooglePlace.primaryTypeDisplayName}</span>}
+                {selectedGooglePlace.googleMapsURI && <a href={selectedGooglePlace.googleMapsURI} target="_blank" rel="noreferrer">Open map <ExternalLink size={13} /></a>}
+              </div>
+            </div>
+          )}
+          <label className="form-span-2">Place name<input placeholder="Search above or type manually" value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} /></label>
+          <label className="form-span-2">Address<input placeholder="Filled automatically when available" value={placeForm.address} onChange={(e) => setPlaceForm({ ...placeForm, address: e.target.value })} /></label>
+          <label>Visit date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={placeForm.visitDate} onChange={(e) => changeVisitDate(e.target.value)} /></label>
+          <label>Planned start <span className="optional-field-note">Optional</span><input className={(placeIsClosed || directTimeProblem) ? 'invalid-time-input' : ''} type="time" value={placeForm.plannedStart} onChange={(e) => { setPlaceFormError(''); setPlaceForm({ ...placeForm, plannedStart: e.target.value, timeSource: e.target.value ? 'manual' : 'suggested' }) }} /><small className="field-help">Leave blank and Today will suggest a time based on distance and closing hours.</small></label>
+          <label>Category<select value={placeForm.category} onChange={(e) => setPlaceForm({ ...placeForm, category: e.target.value })}><option>Attraction</option><option>Shopping</option><option>Food</option><option>Nature</option><option>Hotel</option><option>Transport</option></select></label>
+          <label>Priority<select value={placeForm.priority} onChange={(e) => setPlaceForm({ ...placeForm, priority: e.target.value })}><option>Must Visit</option><option>High</option><option>Optional</option></select></label>
+          <label>Visit duration (min)<input type="number" min="15" step="15" value={placeForm.duration} onChange={(e) => setPlaceForm({ ...placeForm, duration: e.target.value })} /></label>
+          <label className="form-full-width">Notes <span className="optional-field-note">Optional</span><textarea rows="3" placeholder="Add reminders, booking details, food to try, links, or anything you want to remember…" value={placeForm.notes || ''} onChange={(e) => setPlaceForm({ ...placeForm, notes: e.target.value })} /></label>
+          <label>Opens {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.open || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, open: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
+          <label>Closes {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.close || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, close: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
+          {placeForm.hoursSummary && <div className={`google-hours-note form-span-2 ${placeIsClosed ? 'closed-day' : ''}`}><Clock3 size={15} /><span>{'Hours'} for {formatDate(placeForm.visitDate)}: <strong>{placeForm.hoursSummary}</strong>{placeIsClosed && <em>Choose another day — this place cannot be added to this day's itinerary.</em>}</span></div>}
+          {(placeFormError || directTimeProblem) && <div className="place-schedule-error form-full-width"><Clock3 size={16} /><div><strong>This stop cannot be added yet</strong><span>{placeFormError || directTimeProblem}</span></div></div>}
+          <div className="form-actions"><button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel</button><button type="submit" className="primary-button" disabled={placeIsClosed || Boolean(directTimeProblem)}>{editingPlaceId ? 'Update & sync to Today' : 'Save & sync to Today'}</button></div>
+        </form>
+      )}
+
+      <div className="places-list">
+        {visiblePlaces.map((place) => (
+          <article className="place-row" key={place.id}>
+            <div className="place-pin"><MapPin size={19} /></div>
+            <div className="place-main">
+              <div className="place-title-row"><strong>{place.name}</strong><PriorityPill priority={place.priority} /></div>
+              <span>{place.category} · {place.duration} min · {formatDate(place.visitDate)}{place.timeSource === 'manual' && place.plannedStart ? ` at ${place.plannedStart}` : place.suggestedStart ? ` · Suggested ${place.suggestedStart}` : ' · Smart time pending'}</span>
+              {place.address && <small className="place-address">{place.address}</small>}
+              {place.notes && <small className="place-notes-preview">{place.notes}</small>}
+            </div>
+            <div className={`place-hours ${place.hoursStatus === 'closed' ? 'closed-day' : ''}`}><Clock3 size={15} /> {place.hoursSummary || `${place.open} — ${place.close}`}</div>
+            <div className="place-actions">
+              <button type="button" className="icon-button" title="Edit place" onClick={() => editPlace(place)}><Pencil size={16} /></button>
+              {place.googleMapsURI && <a className="icon-button" title="Open map" href={place.googleMapsURI} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>}
+              <button type="button" className="icon-button danger" title="Delete place" onClick={() => deletePlace(place.id)}><Trash2 size={17} /></button>
+            </div>
+          </article>
+        ))}
+        {!visiblePlaces.length && <div className="empty-place-filter">No places scheduled for this date yet.</div>}
+      </div>
+      </PlanAccordionSection>
+
+      <PlanAccordionSection id="plan-transport" icon={TrainFront} title="Transport" subtitle="Airport-to-stay comparison and routing" open={openPlanSections.transport} onToggle={() => togglePlanSection('transport')}>
+      <div className={`card transfer-ready-card ${transferReady ? 'ready' : ''}`}>
         <div className="transfer-icon"><TrainFront size={22} /></div>
         <div className="transfer-copy">
-          <span className="eyebrow">ARRIVAL → FIRST STAY / BASE</span>
-          <strong>{transferReady ? `${data.trip.arrival.location || data.trip.arrival.arrIata || 'Arrival point'} → ${firstHotel.name}` : 'Optional: add and map your first stay/base for airport transfer recommendations.'}</strong>
-          <p>{transferReady ? 'Compare walking, bus, train/MRT, and driving in one compact view. Transit options show the boarding stop, line, next service time, and destination stop when available.' : 'If you add a mapped stay/base, the app can calculate the transfer. Skip this if you do not need accommodation routing.'}</p>
+          <span className="eyebrow">AIRPORT → FIRST STAY / BASE</span>
+          <strong>{transferReady ? `${data.trip.arrival.location || 'Arrival point'} → ${firstHotel.name}` : 'Transport comparison becomes available after both locations are mapped.'}</strong>
+          <p>{transferReady ? 'Compare available options by travel time, distance, and fare when available.' : 'This section is optional if you do not need airport-to-stay routing.'}</p>
         </div>
         {transferReady && (
           <div className="transfer-route-full">
@@ -2207,67 +2632,22 @@ function PlanView({ data, setData, onBack }) {
           </div>
         )}
       </div>
+      </PlanAccordionSection>
 
-      <div id="plan-places" className="plan-scroll-anchor" />
-      <div className="section-heading section-heading-row places-heading-row">
-        <div><span className="eyebrow">PLACES</span><h3>Places you want to visit</h3><p>Edit saved places, filter by trip day, and leave the time blank when you want Today to build a smart schedule.</p></div>
-        <div className="places-heading-actions">
-          <label className="place-date-filter"><CalendarDays size={15} /><select value={placeDateFilter} onChange={(e) => setPlaceDateFilter(e.target.value)}><option value="all">All dates</option>{tripDatesForPlaces.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</select></label>
-          <button className="primary-button" onClick={() => { if (showPlaceForm && !editingPlaceId) closePlaceForm(); else { setEditingPlaceId(null); setSelectedGooglePlace(null); setPlaceForm(createBlankPlaceForm(data.trip.startDate)); setShowPlaceForm(true) } }}><Plus size={17} /> Add place</button>
-        </div>
-      </div>
-
-      {showPlaceForm && (
-        <form className="inline-form place-form card" onSubmit={addPlace}>
-          <div className="form-full-width edit-place-form-title"><div><span className="eyebrow">{editingPlaceId ? 'EDIT PLACE' : 'ADD PLACE'}</span><strong>{editingPlaceId ? 'Update this stop' : 'Add a new stop'}</strong></div>{editingPlaceId && <button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel edit</button>}</div>
-          <div className="form-full-width"><GooglePlacePicker onSelect={selectGooglePlace} placeholder="Search Google Maps — e.g. Taipei 101" /></div>
-          {!googleConfigured && <div className="form-full-width google-setup-warning">The app cannot see a Google demo key yet. Confirm <strong>.env.local</strong> contains <strong>VITE_GOOGLE_MAPS_API_KEY</strong>, then restart Vite.</div>}
-          {selectedGooglePlace && (
-            <div className="selected-place-preview form-full-width">
-              <div className="selected-place-heading"><div className="place-pin"><MapPin size={19} /></div><div><span className="eyebrow">SELECTED FROM GOOGLE MAPS</span><strong>{selectedGooglePlace.name}</strong><span>{selectedGooglePlace.address || 'Address unavailable'}</span></div></div>
-              <div className="selected-place-meta">
-                <span><Clock3 size={14} />{hoursForDate(selectedGooglePlace.regularOpeningHours, placeForm.visitDate).summary}</span>
-                {selectedGooglePlace.primaryTypeDisplayName && <span>{selectedGooglePlace.primaryTypeDisplayName}</span>}
-                {selectedGooglePlace.googleMapsURI && <a href={selectedGooglePlace.googleMapsURI} target="_blank" rel="noreferrer">Open in Google Maps <ExternalLink size={13} /></a>}
-              </div>
-            </div>
-          )}
-          <label className="form-span-2">Place name<input placeholder="Search above or type manually" value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} /></label>
-          <label className="form-span-2">Address<input placeholder="Filled automatically when available" value={placeForm.address} onChange={(e) => setPlaceForm({ ...placeForm, address: e.target.value })} /></label>
-          <label>Visit date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={placeForm.visitDate} onChange={(e) => changeVisitDate(e.target.value)} /></label>
-          <label>Planned start <span className="optional-field-note">Optional</span><input className={(placeIsClosed || directTimeProblem) ? 'invalid-time-input' : ''} type="time" value={placeForm.plannedStart} onChange={(e) => { setPlaceFormError(''); setPlaceForm({ ...placeForm, plannedStart: e.target.value, timeSource: e.target.value ? 'manual' : 'suggested' }) }} /><small className="field-help">Leave blank and Today will suggest a time based on distance and closing hours.</small></label>
-          <label>Category<select value={placeForm.category} onChange={(e) => setPlaceForm({ ...placeForm, category: e.target.value })}><option>Attraction</option><option>Shopping</option><option>Food</option><option>Nature</option><option>Hotel</option><option>Transport</option></select></label>
-          <label>Priority<select value={placeForm.priority} onChange={(e) => setPlaceForm({ ...placeForm, priority: e.target.value })}><option>Must Visit</option><option>High</option><option>Optional</option></select></label>
-          <label>Visit duration (min)<input type="number" min="15" step="15" value={placeForm.duration} onChange={(e) => setPlaceForm({ ...placeForm, duration: e.target.value })} /></label>
-          <label>Opens {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.open || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, open: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
-          <label>Closes {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.close || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, close: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
-          {placeForm.hoursSummary && <div className={`google-hours-note form-span-2 ${placeIsClosed ? 'closed-day' : ''}`}><Clock3 size={15} /><span>{placeForm.source === 'google' ? 'Google schedule' : 'Schedule'} for {formatDate(placeForm.visitDate)}: <strong>{placeForm.hoursSummary}</strong>{placeIsClosed && <em>Choose another day — this place cannot be added to this day's itinerary.</em>}</span></div>}
-          {(placeFormError || directTimeProblem) && <div className="place-schedule-error form-full-width"><Clock3 size={16} /><div><strong>This stop cannot be added yet</strong><span>{placeFormError || directTimeProblem}</span></div></div>}
-          <div className="form-actions"><button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel</button><button type="submit" className="primary-button" disabled={placeIsClosed || Boolean(directTimeProblem)}>{editingPlaceId ? 'Update & sync to Today' : 'Save & sync to Today'}</button></div>
-        </form>
-      )}
-
-      <div className="places-list">
-        {visiblePlaces.map((place) => (
-          <article className="place-row" key={place.id}>
-            <div className="place-pin"><MapPin size={19} /></div>
-            <div className="place-main">
-              <div className="place-title-row"><strong>{place.name}</strong><PriorityPill priority={place.priority} />{place.source === 'google' && <span className="google-source-pill">Google Maps</span>}</div>
-              <span>{place.category} · {place.duration} min · {formatDate(place.visitDate)}{place.timeSource === 'manual' && place.plannedStart ? ` at ${place.plannedStart}` : place.suggestedStart ? ` · Suggested ${place.suggestedStart}` : ' · Smart time pending'}</span>
-              {place.address && <small className="place-address">{place.address}</small>}
-            </div>
-            <div className={`place-hours ${place.hoursStatus === 'closed' ? 'closed-day' : ''}`}><Clock3 size={15} /> {place.hoursSummary || `${place.open} — ${place.close}`}</div>
-            <div className="place-actions">
-              <button className="icon-button" title="Edit place" onClick={() => editPlace(place)}><Pencil size={16} /></button>
-              {place.googleMapsURI && <a className="icon-button" title="Open in Google Maps" href={place.googleMapsURI} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>}
-              <button className="icon-button danger" title="Delete place" onClick={() => deletePlace(place.id)}><Trash2 size={17} /></button>
-            </div>
-          </article>
-        ))}
-        {!visiblePlaces.length && <div className="empty-place-filter">No places scheduled for this date yet.</div>}
-      </div>
-
-      <div className="integration-note"><TrainFront size={21} /><div><strong>Dual transit routing is ready</strong><span>BusMaps official GTFS is the primary public-transit source. Your OpenTripPlanner + GTFS server fills missing bus, rail/MRT and ferry routes. Walk and drive are lightweight estimates with map links, so no paid routing API is required.</span></div><ChevronRight size={19} /></div>
+      <AppDialog
+        open={Boolean(placeMoveDialog)}
+        icon={CalendarDays}
+        title="Move this stop to a better day?"
+        message={placeMoveDialog ? `${placeMoveDialog.candidate?.name || 'This stop'} does not comfortably fit on ${formatDate(placeMoveDialog.candidate?.visitDate)}.` : ''}
+        detail={placeMoveDialog ? `${placeMoveDialog.warning} We found room on ${formatDate(placeMoveDialog.nextDay?.date)} around ${placeMoveDialog.nextDay?.start}.` : ''}
+        confirmLabel={placeMoveDialog ? `Move to ${formatShortDate(placeMoveDialog.nextDay?.date)}` : 'Move stop'}
+        cancelLabel="Keep editing"
+        onConfirm={confirmSuggestedPlaceMove}
+        onCancel={() => {
+          if (placeMoveDialog) setPlaceFormError(`${placeMoveDialog.warning} Suggested alternative: ${formatDate(placeMoveDialog.nextDay?.date)} around ${placeMoveDialog.nextDay?.start}.`)
+          setPlaceMoveDialog(null)
+        }}
+      />
     </section>
   )
 }
@@ -2279,16 +2659,15 @@ function TravelEndpointCard({ title, value, directionLabel, onChange, onPlaceSel
 
   return (
     <div className="card flight-card manual-flight-card">
-      <div className="flight-card-header">
+      <div className="flight-card-header simplified-flight-header">
         <div className="card-icon"><Plane size={18} /></div>
-        <div><span className="eyebrow">{title.toUpperCase()} FLIGHT</span><strong>{value.flightNumber || `${title} details`}</strong></div>
-        <span className="coming-soon-pill small">Live tracking · Coming soon</span>
+        <div className="flight-title-line"><strong>Flight details · {title}</strong><span className="coming-soon-pill small">Tracking soon</span></div>
       </div>
 
       <div className="manual-flight-grid">
-        <label>Flight number<input placeholder="Example: 5J312" value={value.flightNumber || ''} onChange={(e) => onChange({ flightNumber: e.target.value.toUpperCase() })} /></label>
-        <label>Airline<input placeholder="Example: Cebu Pacific" value={value.airline || ''} onChange={(e) => onChange({ airline: e.target.value })} /></label>
-        <label>{directionLabel}<input placeholder={isArrival ? 'Example: Manila' : 'Example: Manila'} value={value[directionField] || ''} onChange={(e) => onChange({ [directionField]: e.target.value })} /></label>
+        <label className="flight-number-field">Flight number<input placeholder="Example: 5J312" value={value.flightNumber || ''} onChange={(e) => onChange({ flightNumber: e.target.value.toUpperCase() })} /></label>
+        <label className="flight-direction-field">{directionLabel}<input placeholder="Example: Manila" value={value[directionField] || ''} onChange={(e) => onChange({ [directionField]: e.target.value })} /></label>
+        <label className="flight-airline-field">Airline<input placeholder="Example: Cebu Pacific" value={value.airline || ''} onChange={(e) => onChange({ airline: e.target.value })} /></label>
         <AirportLocationField title={title} value={value} onChange={onChange} onPlaceSelect={onPlaceSelect} />
         <label>{timeLabel}<input type="time" value={value.time || ''} onChange={(e) => onChange({ time: e.target.value })} /></label>
         <label>Terminal<input placeholder="Optional" value={value.terminal || ''} onChange={(e) => onChange({ terminal: e.target.value })} /></label>
@@ -2323,18 +2702,25 @@ function buildBasicDayItems(data, date) {
     })
   }
 
+  if (arrival.date === date && startPreference === 'arrival_stay' && isMapped(stay)) {
+    const airportReady = addMinutes(arrival.time || '09:00', Number(arrival.transferBufferMinutes || 0))
+    const transferToStay = isMapped(arrival) ? estimateTransferMinutes(arrival, stay) : { minutes: 15 }
+    const stayArrivalTime = addMinutes(airportReady, transferToStay.minutes)
+    items.push({ key: `arrival-stay-${stay.id || date}`, kind: 'stay', start: stayArrivalTime, end: '', title: `Stay/base · ${stay.name || 'Accommodation'}`, subtitle: stay.address || 'Stay/base', detail: 'First stop after the airport', mapUri: stay.googleMapsURI || '', locationData: stay, sort: stayArrivalTime || '00:01' })
+  }
+
   if (startPreference === 'stay' && isMapped(stay)) {
     items.push({ key: `day-start-stay-${date}`, kind: 'start', start: '09:00', end: '', title: `Start · ${stay.name || 'Stay/base'}`, subtitle: stay.address || 'Stay/base', detail: 'Your day starts here', mapUri: stay.googleMapsURI || '', locationData: stay, sort: '00:01' })
   }
 
   ;(trip.hotels || []).forEach((hotel) => {
-    if (hotel.checkInDate === date && startPreference !== 'stay') items.push({ key: `hotel-checkin-${hotel.id}`, kind: 'hotel', start: hotel.checkIn || '15:00', end: '', title: `Stay check-in · ${hotel.name || 'Accommodation'}`, subtitle: hotel.address || 'Accommodation', detail: 'Check-in', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkIn || '15:00' })
+    if (hotel.checkInDate === date && startPreference !== 'stay' && !(startPreference === 'arrival_stay' && String(stay?.id) === String(hotel.id))) items.push({ key: `hotel-checkin-${hotel.id}`, kind: 'hotel', start: hotel.checkIn || '15:00', end: '', title: `Stay check-in · ${hotel.name || 'Accommodation'}`, subtitle: hotel.address || 'Accommodation', detail: 'Check-in', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkIn || '15:00' })
     if (hotel.checkOutDate === date) items.push({ key: `hotel-checkout-${hotel.id}`, kind: 'hotel', start: hotel.checkOut || '11:00', end: '', title: `Stay check-out · ${hotel.name || 'Accommodation'}`, subtitle: hotel.address || 'Accommodation', detail: 'Check-out', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkOut || '11:00' })
   })
 
   ;(data?.places || []).filter((place) => place.visitDate === date).forEach((place) => {
     const start = (place.timeSource === 'manual' ? place.plannedStart : (place.suggestedStart || place.plannedStart)) || ''
-    items.push({ key: `place-${place.id}`, kind: 'place', start, end: start ? addMinutes(start, place.duration) : '', title: place.name || 'Place', subtitle: `${place.category || 'Place'} · ${place.duration || 60} min${place.priority ? ` · ${place.priority}` : ''}`, detail: place.hoursSummary || 'Hours unavailable', mapUri: place.googleMapsURI || '', locationData: place, sort: start || '98:59', suggestedTime: false, scheduleWarning: '' })
+    items.push({ key: `place-${place.id}`, kind: 'place', start, end: start ? addMinutes(start, place.duration) : '', title: place.name || 'Place', subtitle: `${place.category || 'Place'} · ${place.duration || 60} min${place.priority ? ` · ${place.priority}` : ''}`, detail: place.hoursSummary || 'Hours unavailable', notes: place.notes || '', mapUri: place.googleMapsURI || '', locationData: place, sort: start || '98:59', suggestedTime: false, scheduleWarning: '' })
   })
 
   if (arrangement.endMode === 'stay' && isMapped(stay) && (data?.places || []).some((place) => place.visitDate === date)) {
@@ -2354,8 +2740,13 @@ function TodayView({ data, setData }) {
   const [editingTimeKey, setEditingTimeKey] = useState('')
   const [editingTimeValue, setEditingTimeValue] = useState('')
   const [timeEditError, setTimeEditError] = useState('')
-  const [showArrangePanel, setShowArrangePanel] = useState(false)
   const [arrangeDraft, setArrangeDraft] = useState(() => dayArrangementPreference(data, data.trip.startDate))
+  const [openTodaySections, setOpenTodaySections] = useState({ planning: true, transfer: false, itinerary: true, transport: false })
+  const [showTodayAddPlace, setShowTodayAddPlace] = useState(false)
+  const [nearbyPlaces, setNearbyPlaces] = useState([])
+  const [nearbyStatus, setNearbyStatus] = useState('idle')
+  const [nearbyError, setNearbyError] = useState('')
+  const [pendingRemovePlace, setPendingRemovePlace] = useState(null)
 
   useEffect(() => {
     if (!dates.includes(selectedDate)) setSelectedDate(dates[0] || data.trip.startDate)
@@ -2384,7 +2775,155 @@ function TodayView({ data, setData }) {
   const selectedDayStart = dayStartPreference(data, selectedDate)
   const activeArrangement = dayArrangementPreference(data, selectedDate)
   const isArrivalDay = selectedDate === data.trip.arrival.date && Boolean(data.trip.arrival.time)
-  const arrivalTransferReady = selectedDate === data.trip.arrival.date && selectedDayStart === 'arrival_stay' && isMapped(data.trip.arrival) && isMapped(firstHotel)
+  const arrivalTransferReady = selectedDate === data.trip.arrival.date && selectedDayStart === 'arrival_stay' && isMapped(data.trip.arrival) && isMapped(selectedStay)
+
+  const visibleNearbyPlaces = useMemo(
+    () => nearbyPlaces.filter((place) => !isPlaceAlreadySaved(place, data.places || [])),
+    [nearbyPlaces, data.places],
+  )
+
+  const recommendationAnchors = useMemo(() => {
+    const seen = new Set()
+    const anchors = []
+    const addAnchor = (locationData, label) => {
+      if (!isMapped(locationData)) return
+      const key = `${Number(locationData.latitude).toFixed(5)},${Number(locationData.longitude).toFixed(5)}`
+      if (seen.has(key)) return
+      seen.add(key)
+      anchors.push({ locationData, label })
+    }
+    items.forEach((item) => {
+      if (item.kind === 'place') addAnchor(item.locationData, item.title)
+    })
+    if (!anchors.length && isMapped(selectedStay)) addAnchor(selectedStay, selectedStay.name || 'Stay/base')
+    if (!anchors.length && isMapped(data.trip.arrival)) addAnchor(data.trip.arrival, data.trip.arrival.location || 'Arrival point')
+    return anchors
+  }, [items, selectedStay, data.trip.arrival])
+
+  function toggleTodaySection(section) {
+    setOpenTodaySections((prev) => ({ ...prev, [section]: !prev[section] }))
+  }
+
+  function addGooglePlaceToToday(place) {
+    if (!place) return
+    if (isPlaceAlreadySaved(place, data.places || [])) {
+      setNearbyPlaces((prev) => prev.filter((item) => !isPlaceAlreadySaved(item, data.places || [])))
+      setNearbyError(`${place.name || 'This place'} is already on your trip list.`)
+      return
+    }
+    try {
+      // Nearby search already gives us the place id, name, address, coordinates and type.
+      // Do not make a second GetPlace request just to add it to today's checklist.
+      const source = place
+      let candidate = {
+        ...createBlankPlaceForm(selectedDate),
+        ...source,
+        id: Date.now(),
+        name: source.name || 'New place',
+        category: inferPlaceCategory(source.primaryType, source.types),
+        priority: 'High',
+        duration: 60,
+        visitDate: selectedDate,
+        plannedStart: '',
+        suggestedStart: '',
+        timeSource: 'suggested',
+        notes: '',
+      }
+      candidate = placeWithDateHours(candidate, selectedDate)
+      setData((prev) => applySmartSuggestionsForDate({ ...prev, places: [...(prev.places || []), candidate] }, selectedDate))
+      setShowTodayAddPlace(false)
+      setNearbyPlaces((prev) => prev.filter((item) => item.googlePlaceId !== candidate.googlePlaceId))
+    } catch (error) {
+      console.error('Quick add place failed:', error)
+      setNearbyError('This place could not be added right now. Try again or add it from Plan.')
+    }
+  }
+
+  async function loadNearbyRecommendations() {
+    if (!recommendationAnchors.length) {
+      setNearbyError('Map at least one destination first so nearby ideas know where to look.')
+      return
+    }
+    setNearbyStatus('loading')
+    setNearbyError('')
+    setNearbyPlaces([])
+
+    const existingIds = new Set((data.places || []).map((place) => place.googlePlaceId).filter(Boolean))
+    const deduped = new Map()
+    const failures = []
+
+    // Search anchors one at a time instead of bursting several requests at once. This is kinder to
+    // demo quotas, and we stop early once there are enough useful suggestions to render.
+    for (const anchor of recommendationAnchors) {
+      try {
+        const results = await searchGoogleNearbyPlaces({
+          latitude: anchor.locationData.latitude,
+          longitude: anchor.locationData.longitude,
+          anchorName: anchor.label,
+          minDistanceMeters: 0,
+          maxDistanceMeters: 4000,
+          maxResults: 10,
+        })
+        results.forEach((place) => {
+          if (!place.googlePlaceId || existingIds.has(place.googlePlaceId)) return
+          const candidate = { ...place, nearAnchor: anchor.label }
+          const current = deduped.get(place.googlePlaceId)
+          if (!current || Number(candidate.distanceMeters || Infinity) < Number(current.distanceMeters || Infinity)) {
+            deduped.set(place.googlePlaceId, candidate)
+          }
+        })
+      } catch (error) {
+        console.error(`Nearby recommendations failed around ${anchor.label}:`, error)
+        failures.push(error)
+      }
+      if (deduped.size >= 16) break
+    }
+
+    const results = [...deduped.values()]
+      .sort((a, b) => Number(a.distanceMeters || Infinity) - Number(b.distanceMeters || Infinity))
+      .slice(0, 16)
+
+    setNearbyPlaces(results)
+    if (results.length) {
+      setNearbyStatus('ready')
+      return
+    }
+
+    if (failures.length === recommendationAnchors.length) {
+      setNearbyStatus('error')
+      setNearbyError('Nearby suggestions could not load right now. Try again, or check whether your browser is blocking map requests.')
+      return
+    }
+
+    setNearbyStatus('ready')
+    setNearbyError('No matching places were found within 4 km of your mapped destinations.')
+  }
+
+  function requestRemovePlace(item) {
+    if (item?.kind !== 'place') return
+    const placeId = String(item.key).replace(/^place-/, '')
+    const place = (data.places || []).find((entry) => String(entry.id) === placeId)
+    if (!place) return
+    setPendingRemovePlace(place)
+  }
+
+  function confirmRemovePlace() {
+    if (!pendingRemovePlace) return
+    const id = pendingRemovePlace.id
+    setData((prev) => {
+      const nextProgress = { ...(prev.progress || {}) }
+      delete nextProgress[`place-${id}`]
+      const next = {
+        ...prev,
+        places: (prev.places || []).filter((place) => String(place.id) !== String(id)),
+        progress: nextProgress,
+      }
+      return applyAllSmartSuggestions(next)
+    })
+    setEditingTimeKey((current) => current === `place-${id}` ? '' : current)
+    setPendingRemovePlace(null)
+    setTimeEditError('')
+  }
 
   function updateDayStartPreference(mode) {
     setData((prev) => {
@@ -2417,7 +2956,6 @@ function TodayView({ data, setData }) {
       }
       return applySmartSuggestionsForDate(next, selectedDate)
     })
-    setShowArrangePanel(false)
     setTimeEditError('')
   }
 
@@ -2552,77 +3090,107 @@ function TodayView({ data, setData }) {
     <section className="page-section">
       <div className="today-status-card">
         <div><span className="status-dot" /><div><span className="eyebrow">SYNCED DAY PLAN</span><h2>{formatDate(selectedDate)}</h2><p>{items.length ? `${doneCount} of ${items.length} items completed. Changes from Plan appear here automatically.` : 'Nothing scheduled for this day yet. Add a place or travel detail in Plan.'}</p></div></div>
-        <button className="secondary-button"><AlarmClock size={17} /> Reminders later</button>
+        <button type="button" className="secondary-button" disabled title="Reminders are planned for a later version"><AlarmClock size={17} /> Reminders later</button>
       </div>
 
       <div className="day-strip" aria-label="Trip days">
-        {dates.map((date) => <button key={date} className={selectedDate === date ? 'active' : ''} onClick={() => setSelectedDate(date)}><span>{formatDayName(date)}</span><strong>{formatShortDate(date)}</strong></button>)}
+        {dates.map((date) => <button type="button" key={date} className={selectedDate === date ? 'active' : ''} onClick={() => setSelectedDate(date)}><span>{formatDayName(date)}</span><strong>{formatShortDate(date)}</strong></button>)}
       </div>
 
-      <div className="day-start-card">
-        <div>
-          <span className="eyebrow">DAY START</span>
-          <strong>Where are you starting from?</strong>
-          <p>This changes the first transfer and the smart times for the rest of the day.</p>
-        </div>
-        <label>
-          <span>Start this day from</span>
-          <select value={selectedDayStart} onChange={(e) => updateDayStartPreference(e.target.value)}>
-            {isArrivalDay && <option value="arrival_stay" disabled={!isMapped(selectedStay)}>Airport → stay/base → places</option>}
-            {isArrivalDay && <option value="arrival_places">Airport → first destination</option>}
-            <option value="stay" disabled={!isMapped(selectedStay)}>Stay/base → places</option>
-            <option value="first_place">Start at first destination</option>
-          </select>
-        </label>
-        <div className="day-start-summary">
-          <MapPin size={15} />
-          <span>
-            <strong>{dayStartPreferenceLabel(selectedDayStart)}</strong>
-            <small>{selectedDayStart === 'arrival_stay' && selectedStay ? `${data.trip.arrival.location || 'Arrival point'} → ${selectedStay.name || 'Stay/base'} → your first stop` : selectedDayStart === 'arrival_places' ? `${data.trip.arrival.location || 'Arrival point'} → your first stop` : selectedDayStart === 'stay' && selectedStay ? `${selectedStay.name || 'Stay/base'} → your first stop` : 'The first attraction becomes the starting point for the day.'}</small>
-          </span>
-        </div>
-      </div>
+      <PlanAccordionSection
+        id="today-planning"
+        icon={Sparkles}
+        title="Day setup & smart arrangement"
+        subtitle={`${dayStartPreferenceLabel(selectedDayStart)} · ${arrangementLabel(activeArrangement)}`}
+        open={openTodaySections.planning}
+        onToggle={() => toggleTodaySection('planning')}
+      >
+        <div className="today-planning-panel accordion-content-card">
+          <div className="today-planning-intro">
+            <div>
+              <strong>Plan the day's flow</strong>
+              <p>Choose where you begin, how stops should be ordered, and whether the itinerary ends at the last destination or includes the trip back to your stay/base.</p>
+            </div>
+          </div>
 
-      <div className="day-arrange-toolbar">
-        <div>
-          <span className="eyebrow">SMART ARRANGEMENT</span>
-          <strong>{arrangementLabel(activeArrangement)}</strong>
-          <p>Reorder suggested times by distance, closing time, and your preferred end point.</p>
-        </div>
-        <button type="button" className="secondary-button" onClick={() => setShowArrangePanel((value) => !value)}><Sparkles size={16} /> Arrange day</button>
-      </div>
-
-      {showArrangePanel && (
-        <div className="card arrange-day-panel">
-          <label>Arrange by
-            <select value={arrangeDraft.strategy} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, strategy: e.target.value }))}>
-              <option value="balanced">Balanced: distance + closing time</option>
-              <option value="nearest">Nearest first</option>
-              <option value="closing">Earlier closing first</option>
-            </select>
-          </label>
-          <label>End the day near
-            <select value={arrangeDraft.endMode} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, endMode: e.target.value, endPlaceId: e.target.value === 'place' ? prev.endPlaceId : '' }))}>
-              <option value="none">No special end point</option>
-              {isMapped(selectedStay) && <option value="stay">Stay / home base</option>}
-              <option value="shopping">A shopping stop</option>
-              <option value="place">A specific place</option>
-            </select>
-          </label>
-          {arrangeDraft.endMode === 'place' && (
-            <label>Last place
-              <select value={arrangeDraft.endPlaceId || ''} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, endPlaceId: e.target.value }))}>
-                <option value="">Choose a place</option>
-                {(data.places || []).filter((place) => place.visitDate === selectedDate && place.hoursStatus !== 'closed').map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}
+          <div className="today-planning-grid">
+            <label>
+              <span>Start this day from</span>
+              <select value={selectedDayStart} onChange={(e) => updateDayStartPreference(e.target.value)}>
+                {isArrivalDay && <option value="arrival_stay" disabled={!isMapped(selectedStay)}>Airport → stay/base → places</option>}
+                {isArrivalDay && <option value="arrival_places">Airport → first destination</option>}
+                <option value="stay" disabled={!isMapped(selectedStay)}>Stay/base → places</option>
+                <option value="first_place">Start at first destination</option>
               </select>
             </label>
-          )}
-          <div className="arrange-day-actions">
-            <button type="button" className="ghost-button" onClick={() => { setArrangeDraft(activeArrangement); setShowArrangePanel(false) }}>Cancel</button>
-            <button type="button" className="primary-button" onClick={applyArrangement} disabled={arrangeDraft.endMode === 'place' && !arrangeDraft.endPlaceId}><Sparkles size={16} /> Apply suggested arrangement</button>
+
+            <label>
+              <span>Arrange stops by</span>
+              <select value={arrangeDraft.strategy} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, strategy: e.target.value }))}>
+                <option value="balanced">Balanced: distance + closing time</option>
+                <option value="nearest">Nearest first</option>
+                <option value="closing">Earlier closing first</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Finish the day</span>
+              <select value={arrangeDraft.endMode} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, endMode: e.target.value, endPlaceId: e.target.value === 'place' ? prev.endPlaceId : '' }))}>
+                <option value="none">At the final destination</option>
+                {isMapped(selectedStay) && <option value="stay">Return to stay / home base</option>}
+                <option value="shopping">At a shopping stop</option>
+                <option value="place">At a specific place</option>
+              </select>
+            </label>
+
+            {arrangeDraft.endMode === 'place' && (
+              <label>
+                <span>Choose the final place</span>
+                <select value={arrangeDraft.endPlaceId || ''} onChange={(e) => setArrangeDraft((prev) => ({ ...prev, endPlaceId: e.target.value }))}>
+                  <option value="">Choose a place</option>
+                  {(data.places || []).filter((place) => place.visitDate === selectedDate && place.hoursStatus !== 'closed').map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <div className="today-planning-summary">
+            <MapPin size={15} />
+            <span>
+              <strong>{dayStartPreferenceLabel(selectedDayStart)}</strong>
+              <small>
+                {selectedDayStart === 'arrival_stay' && selectedStay
+                  ? `${data.trip.arrival.location || 'Arrival point'} → ${selectedStay.name || 'Stay/base'} → your first stop`
+                  : selectedDayStart === 'arrival_places'
+                    ? `${data.trip.arrival.location || 'Arrival point'} → your first stop`
+                    : selectedDayStart === 'stay' && selectedStay
+                      ? `${selectedStay.name || 'Stay/base'} → your first stop`
+                      : 'The first attraction becomes the starting point for the day.'}
+              </small>
+            </span>
+          </div>
+
+          <div className={`today-endpoint-note ${arrangeDraft.endMode === 'stay' ? 'return-base' : ''}`}>
+            <Navigation size={15} />
+            <span>
+              <strong>{arrangeDraft.endMode === 'stay' ? 'Return trip included' : arrangeDraft.endMode === 'none' ? 'Ends at the final destination' : 'Preferred final stop'}</strong>
+              <small>
+                {arrangeDraft.endMode === 'stay'
+                  ? `Today will add ${selectedStay?.name || 'your stay/base'} after the last destination so you can see the travel time back.`
+                  : arrangeDraft.endMode === 'none'
+                    ? 'No return-to-base leg is added after your final planned destination.'
+                    : arrangeDraft.endMode === 'shopping'
+                      ? 'Smart arrangement will try to keep a shopping stop as the final destination.'
+                      : 'Smart arrangement will keep your selected place as the final destination.'}
+              </small>
+            </span>
+          </div>
+
+          <div className="today-planning-actions">
+            <button type="button" className="primary-button" onClick={applyArrangement} disabled={arrangeDraft.endMode === 'place' && !arrangeDraft.endPlaceId}><Sparkles size={16} /> Apply smart arrangement</button>
           </div>
         </div>
-      )}
+      </PlanAccordionSection>
 
       {dayPlan.error && (
         <div className="today-recovery-banner">
@@ -2631,107 +3199,202 @@ function TodayView({ data, setData }) {
       )}
 
       {arrivalTransferReady && (
-        <div className="card arrival-day-transfer">
-          <div className="transfer-icon"><TrainFront size={22} /></div>
-          <div><span className="eyebrow">FIRST TRANSFER</span><strong>{data.trip.arrival.location} → {firstHotel.name}</strong><p>Get the transfer recommendation here without leaving the app.</p></div>
-          <div className="transfer-route-full">
-            <InAppRouteRecommendations
-              origin={data.trip.arrival}
-              destination={firstHotel}
-              date={data.trip.arrival.date}
-              time={data.trip.arrival.time}
-              utcOffsetMinutes={data.trip.arrival.utcOffsetMinutes ?? firstHotel.utcOffsetMinutes}
-              bufferMinutes={data.trip.arrival.transferBufferMinutes || 0}
-              compact
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="timeline-card card">
-        <div className="section-heading"><div><span className="eyebrow">{formatDayName(selectedDate).toUpperCase()}</span><h3>Travel checklist</h3></div></div>
-        {(suggestedCount > 0 || scheduleWarningCount > 0) && (
-          <div className="smart-time-banner">
-            <Sparkles size={18} />
-            <div>
-              <strong>Smart day timing is active</strong>
-              <span>{suggestedCount ? `${suggestedCount} stop${suggestedCount === 1 ? '' : 's'} received suggested times based on opening/closing hours and nearby stops.` : 'Your fixed times are being checked against opening hours and travel order.'}{scheduleWarningCount ? ` ${scheduleWarningCount} stop${scheduleWarningCount === 1 ? '' : 's'} may not fit today.` : ''}</span>
+        <PlanAccordionSection id="today-first-transfer" icon={TrainFront} title="First transfer" subtitle={`${data.trip.arrival.location || 'Airport'} → ${selectedStay?.name || 'Stay/base'}`} open={openTodaySections.transfer} onToggle={() => toggleTodaySection('transfer')}>
+          <div className="card arrival-day-transfer accordion-inner-card">
+            <div className="transfer-icon"><TrainFront size={22} /></div>
+            <div><strong>{data.trip.arrival.location} → {selectedStay?.name || 'Stay/base'}</strong><p>Your selected day-start flow goes to the stay/base before the first destination.</p></div>
+            <div className="transfer-route-full">
+              <InAppRouteRecommendations
+                origin={data.trip.arrival}
+                destination={selectedStay}
+                date={data.trip.arrival.date}
+                time={data.trip.arrival.time}
+                utcOffsetMinutes={data.trip.arrival.utcOffsetMinutes ?? selectedStay?.utcOffsetMinutes}
+                bufferMinutes={data.trip.arrival.transferBufferMinutes || 0}
+                compact
+              />
             </div>
           </div>
-        )}
-        {timeEditError && <div className="place-schedule-error today-time-error"><Clock3 size={15} /><div><strong>That time won't fit</strong><span>{timeEditError}</span></div></div>}
-        {items.length ? (
-          <div className="timeline">
-            {items.map((item, index) => {
-              const status = itemStatus(item)
-              const nextDaySuggestion = item.kind === 'place' && item.scheduleWarning
-                ? findNextAvailableDay(data, String(item.key).replace(/^place-/, ''), selectedDate)
-                : null
-              return (
-                <div className={`timeline-item ${status}`} key={item.key}>
-                  <div className={`timeline-time ${item.scheduleWarning ? 'has-warning' : ''}`}>
-                    {editingTimeKey === item.key ? (
-                      <div className="timeline-time-editor">
-                        <input type="time" value={editingTimeValue} onChange={(e) => { setEditingTimeValue(e.target.value); setTimeEditError('') }} />
-                        <div>
-                          <button type="button" className="mini-time-action" onClick={() => saveTimeEdit(item)}>Save</button>
-                          <button type="button" className="mini-time-action muted" onClick={() => useSmartTime(item)}>Smart</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <strong>{item.start || '—'}</strong>
-                        <span>{item.suggestedTime ? `Suggested${item.end ? ` · ${item.end}` : ''}` : (item.end || item.kind)}</span>
-                        {item.kind === 'place' && <button type="button" className="timeline-edit-time" onClick={() => beginTimeEdit(item)}><Pencil size={12} /> Edit time</button>}
-                      </>
-                    )}
-                  </div>
-                  <div className="timeline-track"><div className="timeline-dot">{status === 'done' ? <Check size={14} /> : status === 'current' ? <Navigation size={13} /> : null}</div>{index < items.length - 1 && <div className="timeline-line" />}</div>
-                  <div className="timeline-content">
-                    <div className="timeline-title-row"><div><strong>{item.title}</strong><span>{item.subtitle}</span><small>{item.detail}</small></div><StatusPill status={status} /></div>
-                    {item.scheduleWarning && nextDaySuggestion && (
-                      <div className="timeline-move-suggestion">
-                        <CalendarDays size={15} />
-                        <div><strong>Better on {formatDate(nextDaySuggestion.date)}</strong><span>Suggested around {nextDaySuggestion.start}{nextDaySuggestion.end ? `–${nextDaySuggestion.end}` : ''} because it does not fit comfortably today.</span></div>
-                        <button type="button" className="ghost-button" onClick={() => movePlaceToDay(item, nextDaySuggestion)}>Move</button>
-                      </div>
-                    )}
-                    {status === 'current' && <div className="timeline-actions"><button className="primary-button" onClick={() => setStatus(item.key, 'done')}><CheckCircle2 size={17} /> Done</button><button className="ghost-button" onClick={() => setStatus(item.key, 'skipped')}>Skip</button>{item.mapUri && <a className="secondary-button" href={item.mapUri} target="_blank" rel="noreferrer"><Navigation size={17} /> Map</a>}</div>}
-                    {(status === 'done' || status === 'skipped') && <div className="timeline-actions timeline-recovery-actions"><button className="ghost-button" onClick={() => undoStatus(item.key)}><RotateCcw size={15} /> {status === 'done' ? 'Undo done' : 'Undo skip'}</button>{item.mapUri && <a className="secondary-button" href={item.mapUri} target="_blank" rel="noreferrer"><Navigation size={15} /> Map</a>}</div>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : <div className="empty-day"><CalendarDays size={25} /><strong>No plans yet</strong><span>Assign a visit date in Plan. If you leave the time blank, Today will suggest one automatically.</span></div>}
-      </div>
-
-      {items.filter((item) => isMapped(item.locationData)).length >= 2 && (
-        <div className="card day-route-card">
-          <div className="section-heading"><div><span className="eyebrow">BETWEEN STOPS</span><h3>Transport recommendations</h3><p>BusMaps official GTFS is checked first. OpenTripPlanner is used automatically when BusMaps cannot return that transit mode.</p></div></div>
-          <div className="day-route-list">
-            {items.slice(0, -1).map((item, index) => {
-              const next = items[index + 1]
-              if (!isMapped(item.locationData) || !isMapped(next.locationData)) return null
-              return (
-                <div className="day-route-leg" key={`${item.key}-${next.key}`}>
-                  <div className="day-route-leg-title"><MapPin size={15} /><span><strong>{item.title}</strong><small>→ {next.title}</small></span></div>
-                  <InAppRouteRecommendations
-                    origin={item.locationData}
-                    destination={next.locationData}
-                    date={selectedDate}
-                    time={item.end || item.start}
-                    utcOffsetMinutes={item.locationData.utcOffsetMinutes ?? next.locationData.utcOffsetMinutes}
-                    compact
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        </PlanAccordionSection>
       )}
 
-      <div className="smart-suggestion card"><div className="suggestion-icon"><Sparkles size={20} /></div><div><span className="eyebrow">SYNC IS LIVE</span><strong>Places no longer need to be manually copied into Today.</strong><p>When you add a place, change its visit date, map a hotel, or update your flight dates, the matching day is generated from the same trip data.</p></div></div>
+      <PlanAccordionSection
+        id="today-itinerary"
+        icon={ListChecks}
+        title="Travel checklist"
+        subtitle={`${items.length} stop${items.length === 1 ? '' : 's'} · ${doneCount} completed`}
+        open={openTodaySections.itinerary}
+        onToggle={() => toggleTodaySection('itinerary')}
+      >
+        <div className="timeline-card card accordion-inner-card">
+          {(suggestedCount > 0 || scheduleWarningCount > 0) && (
+            <div className="smart-time-banner">
+              <Sparkles size={18} />
+              <div>
+                <strong>Smart day timing is active</strong>
+                <span>{suggestedCount ? `${suggestedCount} stop${suggestedCount === 1 ? '' : 's'} received suggested times based on opening/closing hours and nearby stops.` : 'Your fixed times are being checked against opening hours and travel order.'}{scheduleWarningCount ? ` ${scheduleWarningCount} stop${scheduleWarningCount === 1 ? '' : 's'} may not fit today.` : ''}</span>
+              </div>
+            </div>
+          )}
+          {timeEditError && <div className="place-schedule-error today-time-error"><Clock3 size={15} /><div><strong>That time won't fit</strong><span>{timeEditError}</span></div></div>}
+          {items.length ? (
+            <div className="timeline">
+              {items.map((item, index) => {
+                const status = itemStatus(item)
+                const nextTimelineItem = items[index + 1]
+                const nextDaySuggestion = item.kind === 'place' && item.scheduleWarning
+                  ? findNextAvailableDay(data, String(item.key).replace(/^place-/, ''), selectedDate)
+                  : null
+                return (
+                  <div className={`timeline-item ${status}`} key={item.key}>
+                    <div className={`timeline-time ${item.scheduleWarning ? 'has-warning' : ''}`}>
+                      {editingTimeKey === item.key ? (
+                        <div className="timeline-time-editor">
+                          <input type="time" value={editingTimeValue} onChange={(e) => { setEditingTimeValue(e.target.value); setTimeEditError('') }} />
+                          <div>
+                            <button type="button" className="mini-time-action" onClick={() => saveTimeEdit(item)}>Save</button>
+                            <button type="button" className="mini-time-action muted" onClick={() => useSmartTime(item)}>Smart</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <strong>{item.start || '—'}</strong>
+                          <span>{item.suggestedTime ? `Suggested${item.end ? ` · ${item.end}` : ''}` : (item.end || item.kind)}</span>
+                          {item.kind === 'place' && <button type="button" className="timeline-edit-time" onClick={() => beginTimeEdit(item)}><Pencil size={12} /> Edit time</button>}
+                        </>
+                      )}
+                    </div>
+                    <div className="timeline-track"><div className="timeline-dot">{status === 'done' ? <Check size={14} /> : status === 'current' ? <Navigation size={13} /> : null}</div>{index < items.length - 1 && <div className="timeline-line" />}</div>
+                    <div className="timeline-content">
+                      <div className={`timeline-title-row ${item.kind === 'place' ? 'with-place-photo' : ''}`}>
+                        <div className="timeline-title-copy"><strong>{item.title}</strong><span>{item.subtitle}</span><small>{item.detail}</small>{item.notes && <p className="timeline-place-notes">{item.notes}</p>}</div>
+                        {item.kind === 'place' && <PlacePhoto placeId={item.locationData?.googlePlaceId} place={item.locationData} name={item.title} className="timeline-place-photo" />}
+                        <StatusPill status={status} />
+                      </div>
+                      {item.scheduleWarning && nextDaySuggestion && (
+                        <div className="timeline-move-suggestion">
+                          <CalendarDays size={15} />
+                          <div><strong>Better on {formatDate(nextDaySuggestion.date)}</strong><span>Suggested around {nextDaySuggestion.start}{nextDaySuggestion.end ? `–${nextDaySuggestion.end}` : ''} because it does not fit comfortably today.</span></div>
+                          <button type="button" className="ghost-button" onClick={() => movePlaceToDay(item, nextDaySuggestion)}>Move</button>
+                        </div>
+                      )}
+                      {(() => {
+                        const mapUri = item.mapUri || googlePlaceMapUrl(item.locationData)
+                        const placeActionsClass = item.kind === 'place' ? ' stop-actions' : ''
+                        if (status === 'current' || status === 'upcoming') {
+                          return <div className={`timeline-actions${placeActionsClass}`}><button type="button" className="primary-button" onClick={() => setStatus(item.key, 'done')}><CheckCircle2 size={17} /> Done</button><button type="button" className="ghost-button" onClick={() => setStatus(item.key, 'skipped')}>Skip</button>{mapUri && <a className="secondary-button" href={mapUri} target="_blank" rel="noreferrer"><Navigation size={17} /> Map</a>}{item.kind === 'place' && <button type="button" className="ghost-button remove-stop" onClick={() => requestRemovePlace(item)}><Trash2 size={15} /> Remove</button>}</div>
+                        }
+                        if (status === 'done' || status === 'skipped') {
+                          return <div className={`timeline-actions timeline-recovery-actions${placeActionsClass}`}><button type="button" className="ghost-button" onClick={() => undoStatus(item.key)}><RotateCcw size={15} /> {status === 'done' ? 'Undo done' : 'Undo skip'}</button>{mapUri && <a className="secondary-button" href={mapUri} target="_blank" rel="noreferrer"><Navigation size={15} /> Map</a>}{item.kind === 'place' && <button type="button" className="ghost-button remove-stop" onClick={() => requestRemovePlace(item)}><Trash2 size={15} /> Remove</button>}</div>
+                        }
+                        return null
+                      })()}
+                      {nextTimelineItem && isMapped(item.locationData) && isMapped(nextTimelineItem.locationData) && (
+                        <TimelineLegSummary
+                          origin={item.locationData}
+                          destination={nextTimelineItem.locationData}
+                          date={selectedDate}
+                          time={item.end || item.start}
+                          utcOffsetMinutes={item.locationData.utcOffsetMinutes ?? nextTimelineItem.locationData.utcOffsetMinutes}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : <div className="empty-day"><CalendarDays size={25} /><strong>No plans yet</strong><span>Add a place below. If you leave the time blank, Today will suggest one automatically.</span></div>}
+
+          <div className="today-add-place-block">
+            <button type="button" className="secondary-button today-add-place-button" onClick={() => setShowTodayAddPlace((value) => !value)}><Plus size={17} /> Add place</button>
+            {showTodayAddPlace && (
+              <div className="today-add-place-panel">
+                <div className="today-add-place-search">
+                  <GooglePlacePicker onSelect={addGooglePlaceToToday} placeholder="Search for a place…" compact />
+                </div>
+              </div>
+            )}
+
+            <div className="nearby-discovery">
+              <div className="nearby-head">
+                <div><strong>Nearby ideas</strong><span>{recommendationAnchors.length ? `Within 4 km of any mapped destination on ${formatShortDate(selectedDate)}` : 'Map a destination to discover nearby places'}</span></div>
+                <button
+                  type="button"
+                  className="ghost-button nearby-refresh"
+                  onClick={loadNearbyRecommendations}
+                  disabled={nearbyStatus === 'loading' || !recommendationAnchors.length}
+                  data-debug-reason={nearbyStatus === 'loading' ? 'Nearby search is already running.' : !recommendationAnchors.length ? 'No mapped itinerary stop has coordinates yet. Map at least one destination first.' : ''}
+                  title={!recommendationAnchors.length ? 'Map at least one itinerary destination first' : ''}
+                >
+                  {nearbyStatus === 'loading' ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />} {nearbyStatus === 'loading' ? 'Finding…' : visibleNearbyPlaces.length ? 'Refresh' : 'Find ideas'}
+                </button>
+              </div>
+              {nearbyStatus === 'loading' && <div className="nearby-message nearby-loading">Looking around your mapped stops for useful places…</div>}
+              {nearbyError && <div className="nearby-message">{nearbyError}</div>}
+              {visibleNearbyPlaces.length > 0 && (
+                <>
+                  <div className="nearby-list">
+                    {visibleNearbyPlaces.map((place) => (
+                      <article className="nearby-card" key={place.googlePlaceId || place.name}>
+                        <PlacePhoto placeId={place.googlePlaceId} place={place} name={place.name} className="nearby-photo" />
+                        <div className="nearby-distance">
+                          {formatNearbyDistance(place.distanceMeters)}
+                        </div>
+                        <button type="button" className="nearby-add" title={`Add ${place.name}`} aria-label={`Add ${place.name}`} onClick={() => addGooglePlaceToToday(place)}><Plus size={18} strokeWidth={2.35} /></button>
+                        <div className="nearby-info">
+                          <strong>{place.name}</strong>
+                          <span>{place.primaryTypeDisplayName || inferPlaceCategory(place.primaryType, place.types)}</span>
+                          <small><MapPin size={12} /><span>{place.nearAnchor ? `Near ${place.nearAnchor}` : 'Near your itinerary'}</span></small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="maps-attribution nearby-credit" aria-label="Google Maps attribution">Google Maps</div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </PlanAccordionSection>
+
+      {items.filter((item) => isMapped(item.locationData)).length >= 2 && (
+        <PlanAccordionSection id="today-transport" icon={TrainFront} title="Transport between stops" subtitle="Travel time and options between each stop" open={openTodaySections.transport} onToggle={() => toggleTodaySection('transport')}>
+          <div className="card day-route-card accordion-inner-card">
+            <div className="day-route-list">
+              {items.slice(0, -1).map((item, index) => {
+                const next = items[index + 1]
+                if (!isMapped(item.locationData) || !isMapped(next.locationData)) return null
+                return (
+                  <div className="day-route-leg" key={`${item.key}-${next.key}`}>
+                    <div className="day-route-leg-title"><MapPin size={15} /><span><strong>{item.title}</strong><small>→ {next.title}</small></span></div>
+                    <InAppRouteRecommendations
+                      origin={item.locationData}
+                      destination={next.locationData}
+                      date={selectedDate}
+                      time={item.end || item.start}
+                      utcOffsetMinutes={item.locationData.utcOffsetMinutes ?? next.locationData.utcOffsetMinutes}
+                      compact
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </PlanAccordionSection>
+      )}
+
+      <AppDialog
+        open={Boolean(pendingRemovePlace)}
+        title="Remove this place from the checklist?"
+        message={pendingRemovePlace ? `${pendingRemovePlace.name || 'This place'} will be removed from this trip day's saved places and Today checklist.` : ''}
+        detail="You can add it again later from Nearby ideas or Plan."
+        confirmLabel="Remove place"
+        cancelLabel="Keep place"
+        tone="danger"
+        icon={Trash2}
+        onCancel={() => setPendingRemovePlace(null)}
+        onConfirm={confirmRemovePlace}
+      />
     </section>
   )
 }
@@ -2741,9 +3404,14 @@ function BudgetView({ data, setData, shoppingSpent, shoppingPlanned, totalSpent,
   const [selectedDate, setSelectedDate] = useState(() => data.trip.startDate || tripDates[0] || '')
   const [showShoppingForm, setShowShoppingForm] = useState(false)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
+  const [openBudgetSections, setOpenBudgetSections] = useState({ limits: true, discounts: false, daily: true, shopping: false })
   const [selectedShoppingLocation, setSelectedShoppingLocation] = useState('all')
   const [shoppingForm, setShoppingForm] = useState({ name: '', planned: 0, quantity: 1, priority: 'Want', purchaseDate: '', location: '' })
   const [expenseForm, setExpenseForm] = useState({ date: data.trip.startDate || '', category: 'Food', note: '', amount: 0 })
+  const [showDiscountForm, setShowDiscountForm] = useState(false)
+  const [discountForm, setDiscountForm] = useState({ label: '', amount: 0, date: '', code: '' })
+  const discounts = Array.isArray(data.budget?.discounts) ? data.budget.discounts : []
+  const discountSavings = discounts.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const percentage = data.budget.total > 0 ? Math.min(100, Math.round((totalSpent / data.budget.total) * 100)) : 0
   const shoppingPercentage = data.budget.shopping > 0 ? Math.min(100, Math.round((shoppingSpent / data.budget.shopping) * 100)) : 0
   const defaultDailyTarget = tripDates.length ? Number(data.budget.total || 0) / tripDates.length : 0
@@ -2770,6 +3438,19 @@ function BudgetView({ data, setData, shoppingSpent, shoppingPlanned, totalSpent,
 
   function deleteExpense(id) {
     setData((prev) => ({ ...prev, expenses: (prev.expenses || []).filter((item) => item.id !== id) }))
+  }
+
+  function addDiscount(event) {
+    event.preventDefault()
+    if (!discountForm.label.trim() || !Number(discountForm.amount)) return
+    const next = { ...discountForm, id: Date.now(), label: discountForm.label.trim(), amount: Number(discountForm.amount) }
+    setData((prev) => ({ ...prev, budget: { ...prev.budget, discounts: [...(prev.budget.discounts || []), next] } }))
+    setDiscountForm({ label: '', amount: 0, date: '', code: '' })
+    setShowDiscountForm(false)
+  }
+
+  function deleteDiscount(id) {
+    setData((prev) => ({ ...prev, budget: { ...prev.budget, discounts: (prev.budget.discounts || []).filter((item) => item.id !== id) } }))
   }
 
   function addShopping(event) {
@@ -2813,68 +3494,77 @@ function BudgetView({ data, setData, shoppingSpent, shoppingPlanned, totalSpent,
 
   return (
     <section className="page-section">
-      <div className="section-heading"><div><span className="eyebrow">WHOLE STAY</span><h2>Trip budget</h2><p>See the whole-trip picture, then drill into each travel day.</p></div></div>
+      <div className="section-heading"><div><span className="eyebrow">WHOLE STAY</span><h2>Trip budget</h2><p>See the whole-trip picture, then open only the section you need.</p></div></div>
       <div className="budget-summary-grid">
         <BudgetMetric icon={CircleDollarSign} label="Trip budget" value={formatMoney(data.budget.total, data.trip.currency)} hint={`${percentage}% used`} />
         <BudgetMetric icon={WalletCards} label="Spent so far" value={formatMoney(totalSpent, data.trip.currency)} hint={`${formatMoney(expenseSpent, data.trip.currency)} logged by day`} />
         <BudgetMetric icon={Sparkles} label="Remaining" value={formatMoney(remaining, data.trip.currency)} hint={remaining >= 0 ? 'Still within budget' : 'Over budget'} positive={remaining >= 0} />
+        <BudgetMetric icon={CircleDollarSign} label="Discount savings" value={formatMoney(discountSavings, data.trip.currency)} hint={discounts.length ? `${discounts.length} discount${discounts.length === 1 ? '' : 's'} tracked` : 'No discounts yet'} positive={discountSavings > 0} />
       </div>
 
-      <div className="card budget-control-card">
-        <div className="section-heading section-heading-row"><div><span className="eyebrow">BUDGET SETTINGS</span><h3>Whole-stay limits</h3></div></div>
-        <div className="budget-fields budget-fields-with-currency">
-          <label>Currency<select value={data.trip.currency || 'NT$'} onChange={(e) => setData((prev) => ({ ...prev, trip: { ...prev.trip, currency: e.target.value } }))}>{CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label>Total trip budget ({data.trip.currency})<input type="number" min="0" value={data.budget.total} onChange={(e) => updateBudget('total', e.target.value)} /></label>
-          <label>Shopping budget ({data.trip.currency})<input type="number" min="0" value={data.budget.shopping} onChange={(e) => updateBudget('shopping', e.target.value)} /></label>
-          <label>Unassigned / older spending ({data.trip.currency})<input type="number" min="0" value={data.budget.spentOther} onChange={(e) => updateBudget('spentOther', e.target.value)} /></label>
+      <PlanAccordionSection id="budget-limits" icon={CircleDollarSign} title="Budget settings" subtitle={`${data.trip.currency} · ${formatMoney(data.budget.total, data.trip.currency)} whole-stay budget`} open={openBudgetSections.limits} onToggle={() => setOpenBudgetSections((prev) => ({ ...prev, limits: !prev.limits }))}>
+        <div className="card budget-control-card accordion-inner-card">
+          <div className="budget-fields budget-fields-with-currency">
+            <label>Currency<select value={data.trip.currency || 'NT$'} onChange={(e) => setData((prev) => ({ ...prev, trip: { ...prev.trip, currency: e.target.value } }))}>{CURRENCY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label>Total trip budget ({data.trip.currency})<input type="number" min="0" value={data.budget.total} onChange={(e) => updateBudget('total', e.target.value)} /></label>
+            <label>Shopping budget ({data.trip.currency})<input type="number" min="0" value={data.budget.shopping} onChange={(e) => updateBudget('shopping', e.target.value)} /></label>
+            <label>Unassigned / older spending ({data.trip.currency})<input type="number" min="0" value={data.budget.spentOther} onChange={(e) => updateBudget('spentOther', e.target.value)} /></label>
+          </div>
+          <ProgressBar value={percentage} label={`Whole stay · ${percentage}%`} />
         </div>
-        <ProgressBar value={percentage} label={`Whole stay · ${percentage}%`} />
-      </div>
+      </PlanAccordionSection>
 
-      <div className="section-heading section-heading-row"><div><span className="eyebrow">PER DAY</span><h3>Daily budget</h3><p>Default daily target is the total budget divided across {tripDates.length || 0} trip days. You can override each day.</p></div><button className="primary-button" onClick={() => { setExpenseForm((prev) => ({ ...prev, date: selectedDate })); setShowExpenseForm((value) => !value) }}><Plus size={17} /> Log expense</button></div>
-
-      <div className="budget-day-strip">
-        {tripDates.map((date) => {
-          const spent = spentOnDate(date)
-          const target = Number(data.budget.dailyTargets?.[date] ?? defaultDailyTarget)
-          return <button key={date} className={selectedDate === date ? 'active' : ''} onClick={() => setSelectedDate(date)}><span>{formatDayName(date)}</span><strong>{formatShortDate(date)}</strong><small>{formatMoney(spent, data.trip.currency)} / {formatMoney(Math.round(target), data.trip.currency)}</small></button>
-        })}
-      </div>
-
-      <div className="card daily-budget-card">
-        <div className="daily-budget-head"><div><span className="eyebrow">{formatDate(selectedDate)}</span><h3>{formatMoney(selectedSpent, data.trip.currency)} spent today</h3></div><label>Day budget<input type="number" min="0" value={Math.round(selectedTarget)} onChange={(e) => updateDailyTarget(selectedDate, e.target.value)} /></label></div>
-        <div className="daily-budget-metrics"><div><span>Budget</span><strong>{formatMoney(selectedTarget, data.trip.currency)}</strong></div><div><span>Spent</span><strong>{formatMoney(selectedSpent, data.trip.currency)}</strong></div><div><span>Remaining</span><strong className={selectedRemaining < 0 ? 'negative-text' : 'positive-text'}>{formatMoney(selectedRemaining, data.trip.currency)}</strong></div></div>
-        <ProgressBar value={selectedTarget > 0 ? Math.min(100, Math.round((selectedSpent / selectedTarget) * 100)) : 0} />
-        <div className="daily-expense-list">
-          {selectedExpenses.map((item) => <div className="daily-expense-row" key={item.id}><div><strong>{item.note || item.category}</strong><span>{item.category}</span></div><strong>{formatMoney(item.amount, data.trip.currency)}</strong><button className="icon-button danger" onClick={() => deleteExpense(item.id)}><Trash2 size={15} /></button></div>)}
-          {!selectedExpenses.length && <div className="empty-budget-day">No day-specific expenses logged yet.</div>}
+      <PlanAccordionSection id="budget-discounts" icon={Sparkles} title="Discounts & savings" subtitle={`${formatMoney(discountSavings, data.trip.currency)} saved · ${discounts.length} tracked`} open={openBudgetSections.discounts} onToggle={() => setOpenBudgetSections((prev) => ({ ...prev, discounts: !prev.discounts }))}>
+        <div className="accordion-section-actions"><p>Track coupons, vouchers, promos, and other savings. Enter the amount saved; actual spending should remain the amount you really paid.</p><button type="button" className="secondary-button" onClick={() => setShowDiscountForm((value) => !value)}><Plus size={17} /> Add discount</button></div>
+        {showDiscountForm && <form className="inline-form card discount-form" onSubmit={addDiscount}><label className="form-span-2">Discount<input autoFocus placeholder="Example: Klook voucher" value={discountForm.label} onChange={(e) => setDiscountForm({ ...discountForm, label: e.target.value })} /></label><label>Savings amount ({data.trip.currency})<input type="number" min="0" value={discountForm.amount} onChange={(e) => setDiscountForm({ ...discountForm, amount: e.target.value })} /></label><label>Date <span className="optional-field-note">Optional</span><input type="date" min={data.trip.startDate} max={data.trip.endDate} value={discountForm.date || ''} onChange={(e) => setDiscountForm({ ...discountForm, date: e.target.value })} /></label><label className="form-span-2">Promo / code <span className="optional-field-note">Optional</span><input placeholder="Example: TAIWAN10" value={discountForm.code || ''} onChange={(e) => setDiscountForm({ ...discountForm, code: e.target.value })} /></label><div className="form-actions"><button type="button" className="ghost-button" onClick={() => setShowDiscountForm(false)}>Cancel</button><button className="primary-button" type="submit">Save discount</button></div></form>}
+        <div className="card discount-list-card accordion-inner-card">
+          <div className="discount-list-head"><div><span className="eyebrow">TOTAL SAVED</span><strong>{formatMoney(discountSavings, data.trip.currency)}</strong></div><span>{discounts.length ? `${discounts.length} tracked` : 'No discounts added yet'}</span></div>
+          {discounts.length > 0 && <div className="discount-list">{discounts.map((item) => <div className="discount-row" key={item.id}><div><strong>{item.label}</strong><span>{[item.date ? formatDate(item.date) : '', item.code ? `Code: ${item.code}` : ''].filter(Boolean).join(' · ') || 'Savings'}</span></div><strong className="positive-text">+{formatMoney(item.amount, data.trip.currency)}</strong><button type="button" className="icon-button danger" title="Delete discount" onClick={() => deleteDiscount(item.id)}><Trash2 size={15} /></button></div>)}</div>}
         </div>
-      </div>
+      </PlanAccordionSection>
 
-      {showExpenseForm && <form className="inline-form card expense-form" onSubmit={addExpense}><label>Date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} /></label><label>Category<select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Food</option><option>Transport</option><option>Attraction</option><option>Shopping</option><option>Accommodation</option><option>Other</option></select></label><label className="form-span-2">Description<input placeholder="Example: Dinner at night market" value={expenseForm.note} onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })} /></label><label>Amount ({data.trip.currency})<input type="number" min="0" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></label><div className="form-actions"><button type="button" className="ghost-button" onClick={() => setShowExpenseForm(false)}>Cancel</button><button className="primary-button" type="submit">Save expense</button></div></form>}
-
-      <div className="section-heading section-heading-row"><div><span className="eyebrow">SHOPPING</span><h3>Things to buy</h3><p>{formatMoney(shoppingPlanned, data.trip.currency)} planned · {formatMoney(shoppingSpent, data.trip.currency)} spent</p></div><button className="primary-button" onClick={() => setShowShoppingForm((value) => !value)}><Plus size={17} /> Add item</button></div>
-
-      {showShoppingForm && <form className="inline-form card" onSubmit={addShopping}><label className="form-span-2">Item<input placeholder="Example: Shoes from outlet" value={shoppingForm.name} onChange={(e) => setShoppingForm({ ...shoppingForm, name: e.target.value })} autoFocus /></label><label className="form-span-2">Where to buy <span className="optional-field-note">Optional</span><input placeholder="Example: Mitsui Outlet Park, Ximending, night market…" value={shoppingForm.location || ''} onChange={(e) => setShoppingForm({ ...shoppingForm, location: e.target.value })} /></label><label>Planned price<input type="number" min="0" value={shoppingForm.planned} onChange={(e) => setShoppingForm({ ...shoppingForm, planned: e.target.value })} /></label><label>Quantity<input type="number" min="1" value={shoppingForm.quantity} onChange={(e) => setShoppingForm({ ...shoppingForm, quantity: e.target.value })} /></label><label>Priority<select value={shoppingForm.priority} onChange={(e) => setShoppingForm({ ...shoppingForm, priority: e.target.value })}><option>Must Buy</option><option>Want</option><option>If Budget Allows</option></select></label><label>Purchase date (optional)<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={shoppingForm.purchaseDate || ''} onChange={(e) => setShoppingForm({ ...shoppingForm, purchaseDate: e.target.value })} /></label><div className="form-actions"><button type="button" className="ghost-button" onClick={() => setShowShoppingForm(false)}>Cancel</button><button type="submit" className="primary-button">Save item</button></div></form>}
-
-      <div className="shopping-location-tabs" aria-label="Shopping locations">
-        <button type="button" className={selectedShoppingLocation === 'all' ? 'active' : ''} onClick={() => setSelectedShoppingLocation('all')}><ShoppingBag size={14} /><span>All</span><small>{data.shopping.length}</small></button>
-        {shoppingLocations.map((location) => <button type="button" key={location} className={selectedShoppingLocation === location ? 'active' : ''} onClick={() => setSelectedShoppingLocation(location)}><MapPin size={14} /><span>{location}</span><small>{data.shopping.filter((item) => String(item.location || '').trim() === location).length}</small></button>)}
-        {hasUnassignedShopping && <button type="button" className={selectedShoppingLocation === '__unassigned' ? 'active' : ''} onClick={() => setSelectedShoppingLocation('__unassigned')}><MapPin size={14} /><span>No location</span><small>{data.shopping.filter((item) => !String(item.location || '').trim()).length}</small></button>}
-      </div>
-
-      <div className="card shopping-card">
-        <div className="shopping-progress-header"><div><strong>Shopping budget</strong><span>{formatMoney(data.budget.shopping - shoppingSpent, data.trip.currency)} remaining</span></div><strong>{shoppingPercentage}%</strong></div>
-        <ProgressBar value={shoppingPercentage} />
-        <div className="shopping-list">
-          {visibleShopping.map((item) => {
-            const linePlan = item.planned * item.quantity
-            const difference = item.bought ? linePlan - item.actual : 0
-            return <div className={`shopping-row ${item.bought ? 'bought' : ''}`} key={item.id}><button className={`check-button ${item.bought ? 'checked' : ''}`} onClick={() => updateShopping(item.id, { bought: !item.bought })}>{item.bought && <Check size={15} />}</button><div className="shopping-main"><div className="shopping-name-row"><strong>{item.name}</strong><PriorityPill priority={item.priority} /></div><span>Planned {formatMoney(linePlan, data.trip.currency)} · Qty {item.quantity}</span>{item.location && <span><MapPin size={12} /> {item.location}</span>}{item.purchaseDate && <span>{formatDate(item.purchaseDate)}</span>}{item.bought && <span className={difference >= 0 ? 'positive-text' : 'negative-text'}>{difference >= 0 ? `${formatMoney(difference, data.trip.currency)} under plan` : `${formatMoney(Math.abs(difference), data.trip.currency)} over plan`}</span>}</div><label className="actual-price-field">Actual<div><span>{data.trip.currency}</span><input type="number" min="0" value={item.actual} onChange={(e) => updateShopping(item.id, { actual: Number(e.target.value) })} /></div></label><label className="shopping-date-field">Date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={item.purchaseDate || ''} onChange={(e) => updateShopping(item.id, { purchaseDate: e.target.value })} /></label><button className="icon-button danger shopping-delete-button" title="Delete item" onClick={() => deleteShopping(item.id)}><Trash2 size={17} /></button></div>
+      <PlanAccordionSection id="budget-daily" icon={CalendarDays} title="Daily budget & expense log" subtitle={`${formatMoney(selectedSpent, data.trip.currency)} spent on ${formatShortDate(selectedDate)}`} open={openBudgetSections.daily} onToggle={() => setOpenBudgetSections((prev) => ({ ...prev, daily: !prev.daily }))}>
+        <div className="accordion-section-actions"><p>Default daily target is the total budget divided across {tripDates.length || 0} trip days. You can override each day.</p><button type="button" className="primary-button" onClick={() => { setExpenseForm((prev) => ({ ...prev, date: selectedDate })); setShowExpenseForm((value) => !value) }}><Plus size={17} /> Log expense</button></div>
+        <div className="budget-day-strip">
+          {tripDates.map((date) => {
+            const spent = spentOnDate(date)
+            const target = Number(data.budget.dailyTargets?.[date] ?? defaultDailyTarget)
+            return <button type="button" key={date} className={selectedDate === date ? 'active' : ''} onClick={() => setSelectedDate(date)}><span>{formatDayName(date)}</span><strong>{formatShortDate(date)}</strong><small>{formatMoney(spent, data.trip.currency)} / {formatMoney(Math.round(target), data.trip.currency)}</small></button>
           })}
         </div>
-      </div>
-      {shoppingSpent > data.budget.shopping && <div className="warning-card"><strong>Shopping budget exceeded by {formatMoney(shoppingSpent - data.budget.shopping, data.trip.currency)}.</strong><span>You can still continue — this is a warning, not a spending lock.</span></div>}
+        <div className="card daily-budget-card accordion-inner-card">
+          <div className="daily-budget-head"><div><span className="eyebrow">{formatDate(selectedDate)}</span><h3>{formatMoney(selectedSpent, data.trip.currency)} spent today</h3></div><label>Day budget<input type="number" min="0" value={Math.round(selectedTarget)} onChange={(e) => updateDailyTarget(selectedDate, e.target.value)} /></label></div>
+          <div className="daily-budget-metrics"><div><span>Budget</span><strong>{formatMoney(selectedTarget, data.trip.currency)}</strong></div><div><span>Spent</span><strong>{formatMoney(selectedSpent, data.trip.currency)}</strong></div><div><span>Remaining</span><strong className={selectedRemaining < 0 ? 'negative-text' : 'positive-text'}>{formatMoney(selectedRemaining, data.trip.currency)}</strong></div></div>
+          <ProgressBar value={selectedTarget > 0 ? Math.min(100, Math.round((selectedSpent / selectedTarget) * 100)) : 0} />
+          <div className="daily-expense-list">
+            {selectedExpenses.map((item) => <div className="daily-expense-row" key={item.id}><div><strong>{item.note || item.category}</strong><span>{item.category}</span></div><strong>{formatMoney(item.amount, data.trip.currency)}</strong><button type="button" className="icon-button danger" onClick={() => deleteExpense(item.id)}><Trash2 size={15} /></button></div>)}
+            {!selectedExpenses.length && <div className="empty-budget-day">No day-specific expenses logged yet.</div>}
+          </div>
+        </div>
+        {showExpenseForm && <form className="inline-form card expense-form" onSubmit={addExpense}><label>Date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} /></label><label>Expense type<select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}><option>Food</option><option>Transport</option><option>Attraction</option><option>Shopping</option><option>Accommodation</option><option>Flights</option><option>Fees</option><option>Souvenirs</option><option>Emergency</option><option>Other</option></select></label><label className="form-span-2">Description<input placeholder="Example: Dinner at night market" value={expenseForm.note} onChange={(e) => setExpenseForm({ ...expenseForm, note: e.target.value })} /></label><label>Amount ({data.trip.currency})<input type="number" min="0" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></label><div className="form-actions"><button type="button" className="ghost-button" onClick={() => setShowExpenseForm(false)}>Cancel</button><button className="primary-button" type="submit">Save expense</button></div></form>}
+      </PlanAccordionSection>
+
+      <PlanAccordionSection id="budget-shopping" icon={ShoppingBag} title="Things to buy" subtitle={`${formatMoney(shoppingPlanned, data.trip.currency)} planned · ${formatMoney(shoppingSpent, data.trip.currency)} spent`} open={openBudgetSections.shopping} onToggle={() => setOpenBudgetSections((prev) => ({ ...prev, shopping: !prev.shopping }))}>
+        <div className="accordion-section-actions"><p>Track planned purchases, actual prices, dates, and shopping locations.</p><button type="button" className="primary-button" onClick={() => setShowShoppingForm((value) => !value)}><Plus size={17} /> Add item</button></div>
+        {showShoppingForm && <form className="inline-form card" onSubmit={addShopping}><label className="form-span-2">Item<input placeholder="Example: Shoes from outlet" value={shoppingForm.name} onChange={(e) => setShoppingForm({ ...shoppingForm, name: e.target.value })} autoFocus /></label><label className="form-span-2">Where to buy <span className="optional-field-note">Optional</span><input placeholder="Example: Mitsui Outlet Park, Ximending, night market…" value={shoppingForm.location || ''} onChange={(e) => setShoppingForm({ ...shoppingForm, location: e.target.value })} /></label><label>Planned price<input type="number" min="0" value={shoppingForm.planned} onChange={(e) => setShoppingForm({ ...shoppingForm, planned: e.target.value })} /></label><label>Quantity<input type="number" min="1" value={shoppingForm.quantity} onChange={(e) => setShoppingForm({ ...shoppingForm, quantity: e.target.value })} /></label><label>Priority<select value={shoppingForm.priority} onChange={(e) => setShoppingForm({ ...shoppingForm, priority: e.target.value })}><option>Must Buy</option><option>Want</option><option>If Budget Allows</option></select></label><label>Purchase date (optional)<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={shoppingForm.purchaseDate || ''} onChange={(e) => setShoppingForm({ ...shoppingForm, purchaseDate: e.target.value })} /></label><div className="form-actions"><button type="button" className="ghost-button" onClick={() => setShowShoppingForm(false)}>Cancel</button><button type="submit" className="primary-button">Save item</button></div></form>}
+        <div className="shopping-location-tabs" aria-label="Shopping locations">
+          <button type="button" className={selectedShoppingLocation === 'all' ? 'active' : ''} onClick={() => setSelectedShoppingLocation('all')}><ShoppingBag size={14} /><span>All</span><small>{data.shopping.length}</small></button>
+          {shoppingLocations.map((location) => <button type="button" key={location} className={selectedShoppingLocation === location ? 'active' : ''} onClick={() => setSelectedShoppingLocation(location)}><MapPin size={14} /><span>{location}</span><small>{data.shopping.filter((item) => String(item.location || '').trim() === location).length}</small></button>)}
+          {hasUnassignedShopping && <button type="button" className={selectedShoppingLocation === '__unassigned' ? 'active' : ''} onClick={() => setSelectedShoppingLocation('__unassigned')}><MapPin size={14} /><span>No location</span><small>{data.shopping.filter((item) => !String(item.location || '').trim()).length}</small></button>}
+        </div>
+        <div className="card shopping-card accordion-inner-card">
+          <div className="shopping-progress-header"><div><strong>Shopping budget</strong><span>{formatMoney(data.budget.shopping - shoppingSpent, data.trip.currency)} remaining</span></div><strong>{shoppingPercentage}%</strong></div>
+          <ProgressBar value={shoppingPercentage} />
+          <div className="shopping-list">
+            {visibleShopping.map((item) => {
+              const linePlan = item.planned * item.quantity
+              const difference = item.bought ? linePlan - item.actual : 0
+              return <div className={`shopping-row ${item.bought ? 'bought' : ''}`} key={item.id}><button type="button" className={`check-button ${item.bought ? 'checked' : ''}`} onClick={() => updateShopping(item.id, { bought: !item.bought })}>{item.bought && <Check size={15} />}</button><div className="shopping-main"><div className="shopping-name-row"><strong>{item.name}</strong><PriorityPill priority={item.priority} /></div><span>Planned {formatMoney(linePlan, data.trip.currency)} · Qty {item.quantity}</span>{item.location && <span><MapPin size={12} /> {item.location}</span>}{item.purchaseDate && <span>{formatDate(item.purchaseDate)}</span>}{item.bought && <span className={difference >= 0 ? 'positive-text' : 'negative-text'}>{difference >= 0 ? `${formatMoney(difference, data.trip.currency)} under plan` : `${formatMoney(Math.abs(difference), data.trip.currency)} over plan`}</span>}</div><label className="actual-price-field">Actual<div><span>{data.trip.currency}</span><input type="number" min="0" value={item.actual} onChange={(e) => updateShopping(item.id, { actual: Number(e.target.value) })} /></div></label><label className="shopping-date-field">Date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={item.purchaseDate || ''} onChange={(e) => updateShopping(item.id, { purchaseDate: e.target.value })} /></label><button type="button" className="icon-button danger shopping-delete-button" title="Delete item" onClick={() => deleteShopping(item.id)}><Trash2 size={17} /></button></div>
+            })}
+          </div>
+        </div>
+        {shoppingSpent > data.budget.shopping && <div className="warning-card"><strong>Shopping budget exceeded by {formatMoney(shoppingSpent - data.budget.shopping, data.trip.currency)}.</strong><span>You can still continue — this is a warning, not a spending lock.</span></div>}
+      </PlanAccordionSection>
     </section>
   )
 }
@@ -2889,6 +3579,7 @@ function ChecklistView({ data, setData }) {
   const [buyPrice, setBuyPrice] = useState(0)
   const [buyLocation, setBuyLocation] = useState('')
   const [selectedBuyLocation, setSelectedBuyLocation] = useState('all')
+  const [openChecklistSections, setOpenChecklistSections] = useState({ packing: true, shopping: false })
 
   useEffect(() => {
     if (!bags.some((bag) => bag.id === selectedBagId)) setSelectedBagId(bags[0]?.id || 'bag-main')
@@ -2956,48 +3647,90 @@ function ChecklistView({ data, setData }) {
 
   return (
     <section className="page-section">
-      <div className="section-heading section-heading-row checklist-main-heading"><div><span className="eyebrow">TRAVEL CHECKLIST</span><h2>Things to bring</h2><p>{packingDone} of {data.packing.length} packed · organize everything by bag for {data.trip.name}.</p></div><span className="coming-soon-pill">Smart suggestions · Coming soon</span></div>
+      <div className="section-heading checklist-main-heading"><div><span className="eyebrow">TRAVEL CHECKLIST</span><h2>{data.trip.name}</h2><p>{packingDone} of {data.packing.length} packed · {buyDone} of {data.shopping.length} shopping items bought.</p></div></div>
 
-      <div className="bag-tabs-row">
-        <div className="bag-tabs">
-          {bags.map((bag) => { const count = data.packing.filter((item) => item.bagId === bag.id).length; return <button type="button" key={bag.id} className={selectedBagId === bag.id ? 'active' : ''} onClick={() => setSelectedBagId(bag.id)}><PackageCheck size={16} /><span>{bag.name}</span><small>{count}</small></button> })}
-        </div>
-        <button type="button" className="secondary-button add-bag-tab-button" onClick={() => setShowAddBag((value) => !value)}><Plus size={15} /> Add bag</button>
-      </div>
-      {showAddBag && (
-        <form className="add-bag-inline-form" onSubmit={addBag}>
-          <input autoFocus placeholder="Bag name (checked luggage, day pack...)" value={newBagName} onChange={(e) => setNewBagName(e.target.value)} />
-          <button className="primary-button" type="submit">Add</button>
-          <button className="ghost-button" type="button" onClick={() => { setShowAddBag(false); setNewBagName('') }}>Cancel</button>
-        </form>
-      )}
-
-      <div className="bag-organizer-card bag-panel">
-        {bags.filter((bag) => bag.id === selectedBagId).map((bag) => (
-          <div key={bag.id}>
-            <div className="bag-organizer-head"><label>Bag name<input value={bag.name} onChange={(e) => renameBag(bag.id, e.target.value)} /></label>{bags.length > 1 && <button className="ghost-button trip-delete-button" onClick={() => deleteBag(bag.id)}><Trash2 size={15} /> Remove bag</button>}</div>
-            <div className="checklist-items bag-checklist-items">
-              {data.packing.filter((item) => item.bagId === bag.id).map((item) => <div className={`checklist-item bag-item ${item.checked ? 'checked' : ''}`} key={item.id}><label><input type="checkbox" checked={item.checked} onChange={() => togglePacking(item.id)} /><span>{item.name}</span></label><button className="icon-button danger" onClick={() => deletePacking(item.id)}><Trash2 size={14} /></button></div>)}
-              {!data.packing.some((item) => item.bagId === bag.id) && <div className="empty-bag">Nothing assigned to this bag yet.</div>}
-            </div>
-            <form className="quick-add" onSubmit={addPacking}><input placeholder={`Add item to ${bag.name}...`} value={packingText} onChange={(e) => setPackingText(e.target.value)} /><button className="icon-button primary" type="submit"><Plus size={18} /></button></form>
+      <PlanAccordionSection id="checklist-packing" icon={PackageCheck} title="Things to bring" subtitle={`${packingDone}/${data.packing.length} packed · ${bags.length} bag${bags.length === 1 ? '' : 's'}`} open={openChecklistSections.packing} onToggle={() => setOpenChecklistSections((prev) => ({ ...prev, packing: !prev.packing }))} badge={<span className="coming-soon-pill small">Smart suggestions · Soon</span>}>
+        <div className="bag-tabs-row">
+          <div className="bag-tabs">
+            {bags.map((bag) => { const count = data.packing.filter((item) => item.bagId === bag.id).length; return <button type="button" key={bag.id} className={selectedBagId === bag.id ? 'active' : ''} onClick={() => setSelectedBagId(bag.id)}><PackageCheck size={16} /><span>{bag.name}</span><small>{count}</small></button> })}
           </div>
-        ))}
-      </div>
+          <button type="button" className="secondary-button add-bag-tab-button" onClick={() => setShowAddBag((value) => !value)}><Plus size={15} /> Add bag</button>
+        </div>
+        {showAddBag && (
+          <form className="add-bag-inline-form" onSubmit={addBag}>
+            <input autoFocus placeholder="Bag name (checked luggage, day pack...)" value={newBagName} onChange={(e) => setNewBagName(e.target.value)} />
+            <button className="primary-button" type="submit">Add</button>
+            <button className="ghost-button" type="button" onClick={() => { setShowAddBag(false); setNewBagName('') }}>Cancel</button>
+          </form>
+        )}
+        <div className="bag-organizer-card bag-panel accordion-inner-card">
+          {bags.filter((bag) => bag.id === selectedBagId).map((bag) => (
+            <div key={bag.id}>
+              <div className="bag-organizer-head"><label>Bag name<input value={bag.name} onChange={(e) => renameBag(bag.id, e.target.value)} /></label>{bags.length > 1 && <button type="button" className="icon-button danger bag-delete-button" title={`Remove ${bag.name}`} aria-label={`Remove ${bag.name}`} onClick={() => deleteBag(bag.id)}><Trash2 size={17} /></button>}</div>
+              <div className="checklist-items bag-checklist-items">
+                {data.packing.filter((item) => item.bagId === bag.id).map((item) => <div className={`checklist-item bag-item ${item.checked ? 'checked' : ''}`} key={item.id}><label><input type="checkbox" checked={item.checked} onChange={() => togglePacking(item.id)} /><span>{item.name}</span></label><button type="button" className="icon-button danger" onClick={() => deletePacking(item.id)}><Trash2 size={14} /></button></div>)}
+                {!data.packing.some((item) => item.bagId === bag.id) && <div className="empty-bag">Nothing assigned to this bag yet.</div>}
+              </div>
+              <form className="quick-add" onSubmit={addPacking}><input placeholder={`Add item to ${bag.name}...`} value={packingText} onChange={(e) => setPackingText(e.target.value)} /><button className="icon-button primary" type="submit"><Plus size={18} /></button></form>
+            </div>
+          ))}
+        </div>
+        <div className="card checklist-info smart-checklist-coming-soon"><Sparkles size={21} /><div><div className="smart-checklist-title"><strong>Future smart checklist</strong><span className="coming-soon-pill small">Coming soon</span></div><span>Suggested items based on destination, weather, trip length, activities, airline baggage rules, and which bag an item belongs in.</span></div></div>
+      </PlanAccordionSection>
 
-      <div className="card checklist-info smart-checklist-coming-soon"><Sparkles size={21} /><div><div className="smart-checklist-title"><strong>Future smart checklist</strong><span className="coming-soon-pill small">Coming soon</span></div><span>Suggested items based on destination, weather, trip length, activities, airline baggage rules, and whether an item belongs in carry-on or checked luggage.</span></div></div>
-
-      <div className="card checklist-card shopping-checklist-wide">
-        <div className="checklist-header"><div className="checklist-icon"><ShoppingBag size={22} /></div><div><span className="eyebrow">SHOPPING</span><h3>Things to buy</h3><p>{buyDone} of {data.shopping.length} bought · linked to Budget</p></div></div>
+      <PlanAccordionSection id="checklist-shopping" icon={ShoppingBag} title="Things to buy" subtitle={`${buyDone}/${data.shopping.length} bought · linked to Budget`} open={openChecklistSections.shopping} onToggle={() => setOpenChecklistSections((prev) => ({ ...prev, shopping: !prev.shopping }))}>
         <div className="shopping-location-tabs compact" aria-label="Shopping locations">
           <button type="button" className={selectedBuyLocation === 'all' ? 'active' : ''} onClick={() => setSelectedBuyLocation('all')}><ShoppingBag size={14} /><span>All</span><small>{data.shopping.length}</small></button>
           {buyLocations.map((location) => <button type="button" key={location} className={selectedBuyLocation === location ? 'active' : ''} onClick={() => setSelectedBuyLocation(location)}><MapPin size={14} /><span>{location}</span><small>{data.shopping.filter((item) => String(item.location || '').trim() === location).length}</small></button>)}
           {hasUnassignedBuy && <button type="button" className={selectedBuyLocation === '__unassigned' ? 'active' : ''} onClick={() => setSelectedBuyLocation('__unassigned')}><MapPin size={14} /><span>No location</span><small>{data.shopping.filter((item) => !String(item.location || '').trim()).length}</small></button>}
         </div>
-        <div className="checklist-items buy-checklist">{visibleBuyItems.map((item) => <label className={`checklist-item ${item.bought ? 'checked' : ''}`} key={item.id}><input type="checkbox" checked={item.bought} onChange={() => toggleBuy(item.id)} /><span><strong>{item.name}</strong><small>{formatMoney(item.planned * item.quantity, data.trip.currency)} planned{item.location ? ` · ${item.location}` : ''}</small></span></label>)}</div>
-        <form className="quick-add buy-add buy-add-with-location" onSubmit={addBuy}><input placeholder="Add something to buy..." value={buyText} onChange={(e) => setBuyText(e.target.value)} /><input className="buy-location-input" placeholder="Where? (optional)" value={buyLocation} onChange={(e) => setBuyLocation(e.target.value)} /><div className="money-mini-input"><span>{data.trip.currency}</span><input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} /></div><button className="icon-button primary" type="submit"><Plus size={18} /></button></form>
-      </div>
+        <div className="card checklist-card shopping-checklist-wide accordion-inner-card">
+          <div className="checklist-items buy-checklist">{visibleBuyItems.map((item) => <label className={`checklist-item ${item.bought ? 'checked' : ''}`} key={item.id}><input type="checkbox" checked={item.bought} onChange={() => toggleBuy(item.id)} /><span><strong>{item.name}</strong><small>{formatMoney(item.planned * item.quantity, data.trip.currency)} planned{item.location ? ` · ${item.location}` : ''}</small></span></label>)}</div>
+          <form className="quick-add buy-add buy-add-with-location" onSubmit={addBuy}><input placeholder="Add something to buy..." value={buyText} onChange={(e) => setBuyText(e.target.value)} /><input className="buy-location-input" placeholder="Where? (optional)" value={buyLocation} onChange={(e) => setBuyLocation(e.target.value)} /><div className="money-mini-input"><span>{data.trip.currency}</span><input type="number" min="0" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} /></div><button className="icon-button primary" type="submit"><Plus size={18} /></button></form>
+        </div>
+      </PlanAccordionSection>
     </section>
+  )
+}
+
+
+function TripExportMenu({ data }) {
+  const [open, setOpen] = useState(false)
+  const [exportError, setExportError] = useState('')
+
+  function run(action) {
+    setOpen(false)
+    if (action === exportTripPdf) {
+      action(data, setExportError)
+      return
+    }
+    action(data)
+  }
+
+  return (
+    <div className="trip-export-menu">
+      <button type="button" className="secondary-button trip-export-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <ExternalLink size={16} /> Export
+      </button>
+      {open && (
+        <div className="trip-export-popover" role="menu">
+          <button type="button" onClick={() => run(exportTripPdf)}>PDF report</button>
+          <button type="button" onClick={() => run(exportTripCsv)}>CSV · Sheets friendly</button>
+          <button type="button" onClick={() => run(exportTripExcel)}>Excel</button>
+        </div>
+      )}
+      <AppDialog
+        open={Boolean(exportError)}
+        icon={ExternalLink}
+        title="Export needs another format"
+        message={exportError}
+        detail="Your trip is still safe. CSV and Excel exports remain available."
+        confirmLabel="Okay"
+        hideCancel
+        onConfirm={() => setExportError('')}
+        onCancel={() => setExportError('')}
+      />
+    </div>
   )
 }
 

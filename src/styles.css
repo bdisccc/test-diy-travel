@@ -1,3 +1,4 @@
+
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #182128;
@@ -412,6 +413,13 @@ select:focus { border-color: #7fbaa9; box-shadow: 0 0 0 3px rgba(27, 112, 91, .0
 .checklist-item { grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 11px 2px; border-bottom: 1px solid #edf0ef; font-size: 12px; color: var(--ink); }
 .checklist-item input { width: 17px; height: 17px; accent-color: var(--brand); }
 .checklist-item.checked > span { text-decoration: line-through; color: #8a9692; }
+
+/* Native checkboxes keep keyboard focus without the oversized global input ring. */
+.checklist-item input[type='checkbox']:focus,
+.checklist-item input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(22, 106, 88, 0.22);
+}
 .buy-checklist .checklist-item > span { display: grid; gap: 2px; }
 .buy-checklist strong { font-size: 12px; }
 .buy-checklist small { color: var(--muted); font-size: 9px; font-weight: 500; }
@@ -661,7 +669,6 @@ a.icon-button { text-decoration: none; }
   .selected-place-heading { align-items: flex-start; }
 }
 
-/* v0.3 — schedule sync, mapped flights and hotels */
 .travel-window-grid { align-items: stretch; }
 .linked-window-card {
   padding: 20px;
@@ -814,7 +821,6 @@ a.icon-button { text-decoration: none; }
   .transfer-actions { grid-column: auto; }
 }
 
-/* v0.4 — reliable custom Google search + in-app route recommendations */
 .custom-google-picker {
   position: relative;
   z-index: 20;
@@ -1192,7 +1198,6 @@ a.icon-button { text-decoration: none; }
   .google-suggestions { max-height: 280px; }
 }
 
-/* v0.5 — trip library, editable header, compact statuses */
 .trips-topbar { align-items: center; }
 .editable-topbar { gap: 18px; }
 .topbar-title-wrap { min-width: 0; display: flex; align-items: center; gap: 9px; }
@@ -1311,7 +1316,6 @@ a.icon-button { text-decoration: none; }
   .topbar-date-editor { position: absolute; right: 12px; top: 62px; z-index: 30; width: calc(100vw - 24px); box-shadow: var(--shadow); }
 }
 
-/* v0.6 — Text Search fallback, airport-first flight input, locked Google hours */
 .google-text-search-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1387,7 +1391,6 @@ a.icon-button { text-decoration: none; }
   .google-search-button { width: 100%; }
 }
 
-/* v0.7 — flight lookup + flight tracker card */
 .flight-card-header { position: relative; }
 .flight-status-badge {
   margin-left: auto;
@@ -1463,7 +1466,6 @@ a.icon-button { text-decoration: none; }
   .flight-result-route strong { font-size: 20px; }
 }
 
-/* v0.8 — simplified transport comparisons + flight-number-first tracker */
 .route-option-grid.route-option-grid-four {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1655,7 +1657,6 @@ a.icon-button { text-decoration: none; }
   .flight-result-topline { align-items: flex-start; }
 }
 
-/* v0.9 — smarter flight matching */
 .flight-result-meta {
   display: flex;
   align-items: center;
@@ -1692,7 +1693,6 @@ a.icon-button { text-decoration: none; }
   }
 }
 
-/* v1.0 — manual flights, editable/filterable places, per-day budgets, bag organizer */
 .coming-soon-pill {
   display: inline-flex;
   align-items: center;
@@ -2161,7 +2161,6 @@ a.icon-button { text-decoration: none; }
   .shopping-date-field { grid-column: 2 / -1; }
 }
 
-/* v1.1 — smart day timing + inline airport mapping */
 .manual-flight-airport-field {
   grid-column: 1 / -1;
   display: grid;
@@ -2356,7 +2355,6 @@ a.icon-button { text-decoration: none; }
   }
 }
 
-/* v1.2 — transport rationale, checklist polish, resilient Today, compact mobile top nav */
 .route-na {
   color: #7a8682;
   font-size: 13px !important;
@@ -2614,7 +2612,6 @@ a.icon-button { text-decoration: none; }
   .integration-note { border-radius: 14px; }
 }
 
-/* v1.3 — plan sections, strict place hours, compact checklist, shopping locations */
 .plan-section-nav {
   position: sticky;
   top: 96px;
@@ -2799,7 +2796,6 @@ a.icon-button { text-decoration: none; }
 .view-error-card strong { color: var(--ink); font-size: 12px; }
 .view-error-card span { color: #6e6555; font-size: 10px; line-height: 1.5; }
 
-/* v1.4 — module dashboards, mobile nav placement, currency + shopping locations */
 .module-trip-dashboard { gap: 18px; }
 .module-dashboard-welcome .hero-icon.compact {
   width: 48px;
@@ -3042,7 +3038,6 @@ a.icon-button { text-decoration: none; }
   .shopping-location-tabs button { min-height: 34px; padding-inline: 9px; }
 }
 
-/* v1.5 — quota-safe routing + editable smart times */
 .route-error.route-quota-error {
   display: grid;
   align-items: start;
@@ -3098,7 +3093,7 @@ a.icon-button { text-decoration: none; }
   gap: 5px;
 }
 
-.timeline-time-editor input[type='time'] {
+.timeline-time-editor input[type="time"] {
   width: 100%;
   min-width: 0;
   height: 32px;
@@ -3139,7 +3134,7 @@ a.icon-button { text-decoration: none; }
     grid-template-columns: 64px 24px minmax(0, 1fr);
   }
 
-  .timeline-time-editor input[type='time'] {
+  .timeline-time-editor input[type="time"] {
     height: 30px;
     font-size: 9px;
   }
@@ -3155,8 +3150,6 @@ a.icon-button { text-decoration: none; }
   }
 }
 
-
-/* v1.6 — smart day origin + ferry-ready transport */
 .day-start-card {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(240px, .75fr);
@@ -3258,7 +3251,6 @@ a.icon-button { text-decoration: none; }
   }
 }
 
-/* v1.7 — working smart scheduler, arrangement controls, open-data routing */
 .day-arrange-toolbar {
   display: flex;
   align-items: center;
@@ -3420,7 +3412,6 @@ a.icon-button { text-decoration: none; }
   }
 }
 
-/* v2.0 — transit clarity + regional schedule fallbacks + mobile hardening */
 .route-option,
 .route-option * {
   min-width: 0;
@@ -3685,5 +3676,2681 @@ a.icon-button { text-decoration: none; }
     white-space: normal;
     text-align: right;
     line-height: 1.15;
+  }
+}
+
+:root {
+  --page-max: 1200px;
+  --control-height: 48px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+}
+
+html { overflow-x: hidden; }
+body { overflow-x: hidden; }
+button, input, select, textarea { max-width: 100%; }
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #4f9b87;
+  outline-offset: 2px;
+}
+
+/* Predictable controls: one shared size system. */
+input,
+select {
+  min-height: var(--control-height);
+  padding: 11px 13px;
+  font-size: 14px;
+}
+.primary-button,
+.secondary-button,
+.ghost-button {
+  min-height: var(--control-height);
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.icon-button,
+.topbar-back {
+  width: var(--control-height);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  border-radius: 12px;
+}
+.check-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+
+.page-content {
+  width: 100%;
+  max-width: var(--page-max);
+  padding-inline: 32px;
+}
+.page-section { gap: 24px; }
+.card,
+.hero-card,
+.today-status-card,
+.integration-note,
+.warning-card { min-width: 0; }
+
+/* Plan: remove container spam and keep the primary flow obvious. */
+.plan-hero-card { min-height: 0; }
+.plan-hero-card h2 { max-width: 680px; }
+.travel-window-grid { grid-template-columns: 1fr; }
+.travel-window-grid .editable-card { width: 100%; }
+.plan-section-nav button { min-height: 44px; }
+.plan-section-nav button span { white-space: nowrap; }
+
+/* Single-field Google search. Enter performs the action; no duplicate Search button/title. */
+.google-picker.simplified-search {
+  padding: 0;
+  gap: 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.google-picker.simplified-search.compact { padding: 0; }
+.google-picker.simplified-search .custom-google-input {
+  min-height: var(--control-height);
+  padding-left: 44px;
+  padding-right: 42px;
+}
+.google-picker.simplified-search .google-text-results {
+  margin-top: 2px;
+}
+.google-search-spinner,
+.airport-search-spinner {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--brand);
+  animation: route-spin .8s linear infinite;
+}
+.simplified-airport-search {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: var(--control-height);
+  padding-right: 12px;
+}
+.simplified-airport-search input { min-height: 46px; }
+.google-text-result,
+.airport-search-results button { min-height: 52px; }
+
+/* Flights: concise card title and no collision with the status pill. */
+.simplified-flight-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.simplified-flight-header > div:nth-child(2) { min-width: 0; }
+.simplified-flight-header strong {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  font-size: 15px;
+  line-height: 1.3;
+}
+.flight-status-badge,
+.coming-soon-pill { max-width: 100%; }
+
+/* Export stays one action until the user asks for a format. */
+.trip-export-menu { position: relative; flex: 0 0 auto; }
+.trip-export-trigger { min-width: 112px; }
+.trip-export-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 210px;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 18px 42px rgba(20,45,38,.16);
+}
+.trip-export-popover button {
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+}
+.trip-export-popover button:hover { background: var(--brand-soft); color: var(--brand-dark); }
+
+/* Budget: four summary metrics, clean discount tracking, no floating delete controls. */
+.budget-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.discount-section-heading { margin-top: 2px; }
+.discount-list-card { padding: 18px; }
+.discount-list-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.discount-list-head > div { display: grid; gap: 4px; }
+.discount-list-head strong { font-size: 22px; letter-spacing: -.03em; }
+.discount-list-head > span { color: var(--muted); font-size: 12px; }
+.discount-list { margin-top: 14px; display: grid; }
+.discount-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #edf1ef;
+}
+.discount-row > div { min-width: 0; display: grid; gap: 3px; }
+.discount-row > div strong { overflow-wrap: anywhere; font-size: 12px; }
+.discount-row > div span { color: var(--muted); font-size: 10px; }
+.discount-row > strong { white-space: nowrap; font-size: 12px; }
+
+.daily-budget-card { overflow: visible; }
+.daily-budget-head { align-items: end; }
+.daily-budget-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.daily-budget-metrics strong { overflow-wrap: anywhere; }
+.daily-expense-row .icon-button,
+.shopping-delete-button { position: static; }
+.shopping-row { min-width: 0; }
+.shopping-main span { overflow-wrap: anywhere; }
+
+/* Checklist: tabs + Add bag remain one predictable control group. */
+.bag-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.bag-tabs-row .bag-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+.bag-tabs button,
+.shopping-location-tabs button,
+.budget-day-strip button,
+.day-strip button {
+  min-height: 48px;
+}
+.add-bag-tab-button {
+  min-width: 104px;
+  min-height: 48px;
+  padding-inline: 14px;
+}
+.bag-organizer-card { padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: white; }
+.bag-organizer-head .trip-delete-button {
+  grid-column: auto;
+  width: auto;
+  justify-self: end;
+  color: var(--danger);
+}
+.bag-checklist-items .checklist-item.bag-item { min-height: 56px; }
+.checklist-item.bag-item .icon-button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+.quick-add > .icon-button { width: 48px; height: 48px; }
+
+/* Medium window class: real tablet layout, not enlarged phone UI. */
+@media (min-width: 600px) and (max-width: 839px) {
+  .page-content { padding-inline: 24px; }
+  .details-grid,
+  .flight-grid { grid-template-columns: 1fr; }
+  .manual-flight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .budget-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trip-card-grid,
+  .module-trip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .route-option-grid.route-option-grid-dynamic { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Compact window class. Recompose instead of shrinking. */
+@media (max-width: 599px) {
+  :root { --control-height: 48px; }
+  .topbar {
+    min-height: 68px;
+    padding: 10px 16px;
+  }
+  .topbar h1 { font-size: 18px; }
+  .topbar-back { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .topbar-edit-title { max-width: calc(100vw - 84px); }
+  .page-content {
+    padding: 16px 16px calc(112px + env(safe-area-inset-bottom));
+  }
+  .page-section { gap: 20px; }
+  .section-heading-row { gap: 12px; }
+  .section-heading-row > .primary-button,
+  .section-heading-row > .secondary-button { width: 100%; }
+
+  .hero-card,
+  .editable-card,
+  .flight-card,
+  .hotel-card,
+  .budget-control-card,
+  .daily-budget-card,
+  .shopping-card,
+  .checklist-card,
+  .timeline-card { padding: 16px; }
+
+  .plan-hero-card {
+    display: grid;
+    gap: 16px;
+  }
+  .plan-hero-card h2 { font-size: 22px; }
+  .plan-hero-card p { font-size: 14px; }
+  .trip-export-menu { width: 100%; }
+  .trip-export-trigger { width: 100%; }
+  .trip-export-popover {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+  }
+
+  /* Main navigation stays at the bottom; Plan's internal nav stays at the top. */
+  .mobile-nav {
+    left: 12px;
+    right: 12px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    padding: 6px;
+  }
+  .mobile-nav button {
+    min-width: 0;
+    min-height: 52px;
+    padding: 6px 2px;
+    font-size: 10px;
+  }
+  .plan-section-nav {
+    top: 68px;
+    gap: 4px;
+    margin-inline: -4px;
+    padding: 6px;
+  }
+  .plan-section-nav button {
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0 10px;
+  }
+  .plan-section-nav button span { display: none; }
+  .plan-scroll-anchor { scroll-margin-top: 128px; }
+
+  .flight-grid,
+  .manual-flight-grid,
+  .hotel-fields,
+  .budget-fields-with-currency,
+  .daily-budget-metrics { grid-template-columns: 1fr; }
+  .simplified-flight-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .simplified-flight-header .coming-soon-pill {
+    grid-column: 2;
+    justify-self: start;
+    white-space: normal;
+  }
+
+  .places-heading-actions { display: grid; grid-template-columns: 1fr; }
+  .place-date-filter { min-height: 48px; }
+  .place-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .place-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .place-row .place-actions .icon-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .budget-summary-grid { grid-template-columns: 1fr 1fr; }
+  .metric-card { min-width: 0; padding: 14px; }
+  .metric-card strong { font-size: 18px; overflow-wrap: anywhere; }
+  .daily-budget-head { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .daily-budget-head label { width: 100%; max-width: none; }
+  .discount-list-head { align-items: start; flex-direction: column; }
+  .discount-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .discount-row > .icon-button { grid-column: 2; grid-row: 1 / 3; }
+
+  .shopping-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 44px;
+    gap: 10px;
+    align-items: start;
+  }
+  .shopping-main { grid-column: 2; }
+  .actual-price-field,
+  .shopping-date-field {
+    grid-column: 2;
+    width: 100%;
+    max-width: none;
+  }
+  .shopping-delete-button {
+    grid-column: 3;
+    grid-row: 1;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .bag-tabs-row { align-items: stretch; }
+  .bag-tabs { gap: 6px; }
+  .bag-tabs button { min-width: max-content; }
+  .add-bag-tab-button {
+    min-width: 96px;
+    width: auto;
+    padding-inline: 12px;
+    font-size: 12px;
+  }
+  .add-bag-tab-button span { display: inline; }
+  .bag-organizer-head {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .bag-organizer-head label { width: 100%; }
+  .bag-organizer-head .trip-delete-button {
+    width: fit-content;
+    justify-self: start;
+  }
+  .quick-add,
+  .buy-add-with-location {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+  .buy-add-with-location > input,
+  .buy-add-with-location .buy-location-input,
+  .buy-add-with-location .money-mini-input { grid-column: 1 / -1; }
+  .buy-add-with-location > .icon-button { grid-column: 2; }
+
+  .route-option-grid.route-option-grid-dynamic { grid-template-columns: 1fr; }
+  .route-option { min-height: 0; }
+  .route-unavailable-copy { display: block; }
+}
+
+@media (max-width: 359px) {
+  .page-content { padding-inline: 12px; }
+  .budget-summary-grid { grid-template-columns: 1fr; }
+  .mobile-nav { left: 8px; right: 8px; }
+  .mobile-nav button span { font-size: 9px; }
+  .add-bag-tab-button { min-width: 88px; padding-inline: 10px; }
+}
+
+@media (min-width: 1200px) {
+  .page-content { padding-inline: 40px; }
+}
+
+@media (min-width: 1600px) {
+  .page-content { max-width: 1280px; padding-inline: 48px; }
+}
+
+/* Final compact/medium safety checks for action groups. */
+@media (min-width: 600px) and (max-width: 839px) {
+  .place-row .place-actions .icon-button {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+  .bag-tabs button,
+  .shopping-location-tabs button,
+  .budget-day-strip button,
+  .day-strip button { min-height: 48px; }
+}
+
+@media (max-width: 599px) {
+  .form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 8px;
+  }
+  .form-actions > * { width: 100%; }
+  .transfer-actions,
+  .regional-transit-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .transfer-actions > *,
+  .regional-transit-actions > * { width: 100%; }
+}
+
+/* The desktop/tablet sidebar is a true app rail: page scrolling must not move it. */
+@media (min-width: 721px) {
+  .app-shell {
+    display: block;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 120;
+    width: 245px;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .main-content {
+    width: calc(100% - 245px);
+    min-height: 100vh;
+    margin-left: 245px;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 980px) {
+  .sidebar { width: 82px; }
+  .main-content {
+    width: calc(100% - 82px);
+    margin-left: 82px;
+  }
+}
+
+/* Flight composition: origin/destination beside the flight number; airline + airport get full usable width. */
+.flight-number-field,
+.flight-direction-field { min-width: 0; }
+.flight-airline-field { grid-column: 1 / -1; }
+.airport-field-search.is-selected {
+  border-color: #8bc5b4;
+  background: #f6fcf9;
+}
+.airport-field-search.is-selected > svg { color: var(--brand); }
+
+/* Stay/base: use the card width instead of squeezing its name into one small grid cell. */
+.hotel-fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.hotel-name-field,
+.hotel-address-field { grid-column: 1 / -1; }
+
+/* Route content must never be wider than the card that owns it. */
+.transfer-ready-card,
+.transfer-route-full,
+.route-recommendation,
+.route-distance-banner,
+.route-option-grid,
+.route-details,
+.regional-transit-fallback {
+  min-width: 0;
+  max-width: 100%;
+}
+.route-recommendation { overflow: hidden; }
+.route-distance-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  /* Safari/iOS friendly two-level sticky header. */
+  .topbar {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 95;
+    min-height: 68px;
+  }
+
+  .plan-editor-page,
+  .page-content,
+  .main-content {
+    overflow: visible;
+  }
+
+  .plan-section-nav {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 68px !important;
+    z-index: 85;
+    align-self: start;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+  }
+
+  .plan-scroll-anchor { scroll-margin-top: 128px; }
+
+  /* Transport choices stay in one compact strip. Selecting one only changes the detail panel below. */
+  .route-option-grid.route-option-grid-dynamic {
+    display: flex;
+    grid-template-columns: none;
+    width: 100%;
+    max-width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 1px 1px 5px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .route-option-grid.route-option-grid-dynamic::-webkit-scrollbar { display: none; }
+
+  .route-option-grid.route-option-grid-dynamic .route-option {
+    flex: 0 0 138px;
+    width: 138px;
+    min-width: 138px;
+    max-width: 138px;
+    min-height: 112px;
+    padding: 11px;
+    align-content: start;
+    scroll-snap-align: start;
+  }
+
+  .route-option-grid.route-option-grid-dynamic .route-option-head {
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .route-option-grid.route-option-grid-dynamic .route-option-head > span {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .route-option-grid.route-option-grid-dynamic .route-option-head small {
+    max-width: 72px;
+    padding: 3px 5px;
+    white-space: normal;
+    text-align: right;
+    line-height: 1.15;
+  }
+
+  .route-option-grid.route-option-grid-dynamic .route-option > strong {
+    font-size: 16px;
+    line-height: 1.15;
+  }
+
+  .route-option-grid.route-option-grid-dynamic .route-option > span,
+  .route-option-grid.route-option-grid-dynamic .route-option > em {
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  /* Keep unavailable choices short in the chooser; the user only needs to know they are unavailable. */
+  .route-option-grid.route-option-grid-dynamic .route-unavailable-copy { display: none; }
+
+  .route-details,
+  .regional-transit-fallback {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .regional-transit-fallback { grid-template-columns: 1fr; }
+  .regional-transit-actions { grid-column: auto; }
+
+  .hotel-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hotel-name-field,
+  .hotel-address-field { grid-column: 1 / -1; }
+}
+
+@media (max-width: 599px) {
+  .manual-flight-grid { grid-template-columns: 1fr 1fr; }
+  .flight-airline-field,
+  .manual-flight-airport-field { grid-column: 1 / -1; }
+
+  .hotel-fields { grid-template-columns: 1fr 1fr; }
+  .hotel-name-field,
+  .hotel-address-field { grid-column: 1 / -1; }
+
+  .plan-section-nav {
+    gap: 3px;
+    padding: 5px;
+  }
+  .plan-section-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 46px;
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .hotel-fields { grid-template-columns: 1fr; }
+  .hotel-name-field,
+  .hotel-address-field { grid-column: auto; }
+}
+
+@media (max-width: 359px) {
+  .manual-flight-grid { grid-template-columns: 1fr; }
+  .flight-airline-field,
+  .manual-flight-airport-field { grid-column: auto; }
+}
+
+/* Country stays above the trip title instead of running inline with it. */
+.topbar-title-copy {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+.topbar-title-copy > .eyebrow {
+  display: block !important;
+  margin: 0;
+  color: #7a8984;
+  font-size: 9px;
+  line-height: 1.1;
+  letter-spacing: .14em;
+}
+.topbar-edit-title {
+  margin: 0;
+  min-width: 0;
+}
+.topbar-edit-title h1 { line-height: 1.1; }
+
+/* Plan's section chooser stays available while moving through the editor. */
+.plan-section-nav {
+  position: sticky !important;
+  top: 12px !important;
+  z-index: 86;
+  width: 100%;
+  background: rgba(255,255,255,.96);
+  backdrop-filter: blur(14px);
+}
+.plan-scroll-anchor,
+.plan-accordion-section { scroll-margin-top: 86px; }
+
+/* Major Plan sections collapse to keep the page short and scannable. */
+.plan-accordion-section {
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.plan-accordion-toggle {
+  width: 100%;
+  min-height: 72px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+.plan-accordion-toggle:hover,
+.plan-accordion-toggle:focus-visible {
+  outline: none;
+  background: #f7fbf9;
+}
+.plan-accordion-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.plan-accordion-copy { min-width: 0; display: grid; gap: 3px; }
+.plan-accordion-copy strong { font-size: 14px; line-height: 1.25; }
+.plan-accordion-copy small { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.plan-accordion-chevron { color: #72817c; transition: transform .18s ease; }
+.plan-accordion-section.open .plan-accordion-chevron { transform: rotate(180deg); }
+.plan-accordion-body {
+  min-width: 0;
+  padding: 12px 16px 18px;
+  display: grid;
+  gap: 16px;
+}
+.plan-accordion-section.open .plan-accordion-toggle { border-radius: 18px 18px 0 0; }
+.plan-accordion-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+.plan-accordion-actions.places-heading-actions { justify-content: space-between; }
+
+/* Tracking badge remains directly beside the flight title at every width. */
+.simplified-flight-header {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.flight-title-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.flight-title-line strong { min-width: 0; }
+.flight-title-line .coming-soon-pill { flex: 0 0 auto; }
+
+/* Selected airports keep the same search affordance; no misleading edit-pencil icon. */
+.airport-field-search.is-selected > svg { color: var(--brand); }
+
+/* Arrival -> stay/base is a real itinerary stop, so its route leg appears before place #1. */
+.timeline-item .timeline-title-row small { overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .topbar-title-copy > .eyebrow { display: block !important; }
+  .topbar-title-wrap { align-items: center; }
+  .topbar-edit-title { max-width: calc(100vw - 92px); }
+
+  /* two sticky levels: trip header, then Plan's internal section chooser */
+  .plan-section-nav {
+    top: 68px !important;
+    z-index: 86;
+  }
+  .plan-accordion-section { scroll-margin-top: 132px; }
+
+  .plan-accordion-toggle {
+    min-height: 64px;
+    padding: 11px 12px;
+    grid-template-columns: auto minmax(0,1fr) auto;
+    gap: 9px;
+  }
+  .plan-accordion-toggle > .coming-soon-pill { display: none; }
+  .plan-accordion-icon { width: 36px; height: 36px; }
+  .plan-accordion-copy strong { font-size: 13px; }
+  .plan-accordion-copy small { font-size: 10px; }
+  .plan-accordion-body { padding: 10px 12px 14px; gap: 12px; }
+  .plan-accordion-actions,
+  .plan-accordion-actions.places-heading-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .plan-accordion-actions > * { width: 100%; }
+
+  .flight-title-line { gap: 6px; }
+  .flight-title-line .coming-soon-pill.small {
+    padding: 4px 7px;
+    font-size: 8px;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 721px) {
+  .plan-section-nav { top: 12px !important; }
+}
+
+.accordion-content-card,
+.accordion-inner-card {
+  margin: 0;
+}
+
+.accordion-helper-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.accordion-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 0;
+}
+.accordion-section-actions p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.inline-form textarea,
+.place-form textarea {
+  width: 100%;
+  min-height: 92px;
+  padding: 12px 14px;
+  resize: vertical;
+  border: 1px solid #d7e1de;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+}
+.inline-form textarea:focus,
+.place-form textarea:focus {
+  outline: none;
+  border-color: #78b6a4;
+  box-shadow: 0 0 0 3px #e7f5f0;
+}
+.place-notes-preview {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #65736f;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.timeline-title-row.with-place-photo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, 148px) auto;
+  align-items: start;
+  gap: 12px;
+}
+.timeline-title-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.timeline-place-notes {
+  margin: 7px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #bcded2;
+  border-radius: 0 8px 8px 0;
+  background: #f6faf8;
+  color: #56645f;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.place-photo {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 10;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid #e1e8e5;
+  border-radius: 12px;
+  background: #edf3f1;
+}
+.place-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.place-photo-skeleton {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #789087;
+}
+.place-photo-skeleton svg { animation: route-spin .8s linear infinite; }
+.place-photo figcaption {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  max-width: calc(100% - 10px);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(15, 38, 32, .72);
+  color: #fff;
+  font-size: 7px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.place-photo figcaption a { color: inherit; text-decoration: none; }
+
+.timeline-leg-summary {
+  margin-top: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px dashed #d9e5e1;
+  border-radius: 10px;
+  background: #fbfdfc;
+}
+.timeline-leg-destination,
+.timeline-leg-options,
+.timeline-leg-options span,
+.timeline-leg-options button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.timeline-leg-destination {
+  flex: 0 0 auto;
+  color: #52635d;
+  font-size: 9px;
+  font-weight: 800;
+}
+.timeline-leg-options {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.timeline-leg-options span,
+.timeline-leg-options button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #e1e8e5;
+  border-radius: 999px;
+  background: #fff;
+  color: #52635d;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.timeline-leg-options button {
+  cursor: pointer;
+  color: var(--brand);
+}
+.timeline-leg-options .spin { animation: route-spin .8s linear infinite; }
+
+.today-add-place-block {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #edf1ef;
+}
+.today-add-place-button { width: fit-content; }
+.today-add-place-panel {
+  margin-top: 0;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #dce8e3;
+  border-radius: 14px;
+  background: #f9fcfb;
+}
+.today-add-place-search { display: grid; gap: 7px; }
+
+@media (max-width: 839px) {
+  .accordion-section-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .accordion-section-actions > button { width: 100%; justify-content: center; }
+
+  .timeline-title-row.with-place-photo {
+    grid-template-columns: minmax(0, 1fr) 96px auto;
+    gap: 8px;
+  }
+  .timeline-place-photo {
+    min-height: 70px;
+    border-radius: 10px;
+  }
+  .timeline-leg-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .timeline-leg-options { justify-content: flex-start; }
+}
+
+@media (max-width: 599px) {
+  .plan-accordion-section { border-radius: 14px; }
+  .plan-accordion-toggle { min-height: 58px; padding: 10px 11px; }
+  .plan-accordion-body { padding: 10px 10px 12px; }
+  .timeline-title-row.with-place-photo {
+    grid-template-columns: minmax(0, 1fr) 82px;
+  }
+  .timeline-title-row.with-place-photo > .status-icon {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    z-index: 2;
+  }
+  .timeline-place-photo {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: 82px;
+    height: 68px;
+    justify-self: end;
+  }
+  .timeline-title-copy { padding-right: 2px; }
+  .timeline-place-notes { font-size: 9px; }
+  .timeline-leg-summary { margin-top: 8px; padding: 8px; }
+  .timeline-leg-options { width: 100%; gap: 5px; }
+  .timeline-leg-options span,
+  .timeline-leg-options button { min-height: 32px; font-size: 8px; }
+  .today-add-place-button { width: 100%; justify-content: center; }
+  .today-add-place-panel { padding: 10px; }
+}
+
+.danger-button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid #c84740;
+  border-radius: 12px;
+  background: #c84740;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Day start + smart arrangement are one compact planning filter. */
+.today-planning-panel {
+  display: grid;
+  gap: 14px;
+  padding: 15px;
+  border: 1px solid #dce8e3;
+  border-radius: 15px;
+  background: #fbfefd;
+}
+.today-planning-intro {
+  min-width: 0;
+}
+.today-planning-intro strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+}
+.today-planning-intro p {
+  margin: 4px 0 0;
+  max-width: 800px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.today-planning-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.today-planning-grid label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #566762;
+  font-size: 9px;
+  font-weight: 800;
+}
+.today-planning-grid select {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid #d7e2de;
+  border-radius: 11px;
+  background: #fff;
+  padding: 0 12px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+}
+.today-planning-summary,
+.today-endpoint-note {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: #eef8f4;
+  color: var(--brand);
+}
+.today-endpoint-note {
+  background: #f6f8f7;
+  color: #62716c;
+}
+.today-endpoint-note.return-base {
+  background: #eef8f4;
+  color: var(--brand);
+}
+.today-planning-summary > span,
+.today-endpoint-note > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.today-planning-summary strong,
+.today-endpoint-note strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+.today-planning-summary small,
+.today-endpoint-note small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.today-planning-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.today-planning-actions .primary-button {
+  min-width: 220px;
+}
+
+/* Desktop keeps the compact chips; phones get one dropdown. */
+.timeline-leg-mobile-dropdown { display: none; }
+.timeline-leg-mobile-dropdown summary {
+  list-style: none;
+}
+.timeline-leg-mobile-dropdown summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 599px) {
+  .timeline-leg-options-desktop { display: none !important; }
+  .timeline-leg-mobile-dropdown {
+    width: 100%;
+    display: block;
+    border: 1px solid #dfe8e4;
+    border-radius: 11px;
+    background: #fff;
+    overflow: hidden;
+  }
+  .timeline-leg-mobile-dropdown summary {
+    min-height: 42px;
+    padding: 9px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .timeline-leg-mobile-dropdown summary > span {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .timeline-leg-mobile-dropdown[open] summary svg:last-child {
+    transform: rotate(180deg);
+  }
+  .timeline-leg-mobile-menu {
+    display: grid;
+    border-top: 1px solid #edf2ef;
+  }
+  .timeline-leg-mobile-option {
+    min-width: 0;
+    min-height: 42px;
+    padding: 9px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid #f0f3f2;
+    color: #465751;
+    font-size: 9px;
+  }
+  .timeline-leg-mobile-option:last-child { border-bottom: 0; }
+  .timeline-leg-mobile-option > span {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .timeline-leg-mobile-option strong {
+    flex: 0 0 auto;
+    color: var(--ink);
+    font-size: 9px;
+  }
+  .timeline-leg-mobile-option.muted { color: var(--muted); }
+  .timeline-leg-mobile-retry {
+    width: 100%;
+    min-height: 44px;
+    border: 0;
+    background: #fff;
+    color: var(--brand);
+    font: inherit;
+    font-size: 9px;
+    font-weight: 800;
+  }
+}
+
+/* Cross-device overflow guardrails. */
+.app-shell,
+.main-content,
+.page-content,
+.page-section,
+.card,
+.plan-accordion-section,
+.plan-accordion-body,
+.accordion-content-card,
+.accordion-inner-card,
+.inline-form,
+.timeline-card,
+.timeline,
+.timeline-item,
+.timeline-content,
+.timeline-title-row,
+.timeline-title-copy,
+.today-planning-panel,
+.today-planning-grid,
+.arrival-day-transfer,
+.transfer-route-full,
+.day-route-card,
+.day-route-list,
+.day-route-leg,
+.budget-summary-grid,
+.budget-fields,
+.shopping-row,
+.checklist-card,
+.quick-add {
+  min-width: 0;
+  max-width: 100%;
+}
+.page-content,
+.page-section { overflow-x: clip; }
+button,
+input,
+select,
+textarea,
+a.secondary-button,
+a.primary-button {
+  min-width: 0;
+  max-width: 100%;
+}
+button,
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button {
+  overflow-wrap: anywhere;
+}
+input,
+select,
+textarea {
+  width: 100%;
+}
+img,
+svg { max-width: 100%; }
+.timeline-title-copy strong,
+.timeline-title-copy span,
+.timeline-title-copy small,
+.place-address{
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+@media (max-width: 839px) {
+  .today-planning-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .today-planning-grid label:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .today-planning-actions .primary-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .arrange-day-actions,
+  .form-actions,
+  .trip-library-actions,
+  .timeline-actions {
+    min-width: 0;
+  }
+  .manual-flight-grid,
+  .details-grid,
+  .travel-window-grid,
+  .hotel-fields,
+  .budget-fields,
+  .expense-form-grid {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 599px) {
+  .today-planning-panel {
+    gap: 10px;
+    padding: 10px;
+  }
+  .today-planning-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+  .today-planning-grid label,
+  .today-planning-grid label:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+  .today-planning-grid select {
+    min-height: 48px;
+    font-size: 11px;
+  }
+  .today-planning-summary,
+  .today-endpoint-note {
+    padding: 10px;
+  }
+  .today-planning-actions .primary-button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .timeline-leg-summary {
+    width: 100%;
+    padding: 8px;
+    gap: 7px;
+  }
+  .timeline-leg-destination {
+    width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .timeline-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .timeline-actions > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    white-space: normal;
+  }
+  .timeline-actions > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .form-actions,
+  .arrange-day-actions,
+  .discount-form-actions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .form-actions > *,
+  .arrange-day-actions > *,
+  .discount-form-actions > * {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .manual-flight-grid,
+  .travel-window-grid,
+  .details-grid,
+  .hotel-fields,
+  .budget-fields,
+  .budget-fields-with-currency,
+  .expense-form-grid,
+  .shopping-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .manual-flight-airport-field,
+  .flight-airline-field,
+  .hotel-address-field,
+  .form-full-width,
+  .form-span-2 {
+    grid-column: auto !important;
+  }
+
+  .day-strip {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .day-strip::-webkit-scrollbar { display: none; }
+  .day-strip button {
+    flex: 0 0 auto;
+    min-width: 68px;
+  }
+
+  .timeline-item {
+    grid-template-columns: 48px 20px minmax(0, 1fr);
+    gap: 7px;
+  }
+  .timeline-time strong { font-size: 10px; }
+  .timeline-time span { font-size: 8px; }
+  .timeline-content { min-width: 0; padding-left: 3px; }
+
+  .timeline-title-row,
+  .timeline-title-row.with-place-photo {
+    min-width: 0;
+  }
+
+  .shopping-location-tabs,
+.bag-tabs,
+.plan-section-nav{
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .topbar,
+  .editable-topbar {
+    min-width: 0;
+  }
+  .topbar-title-wrap,
+  .topbar-title-copy,
+  .topbar-edit-title {
+    min-width: 0;
+  }
+  .topbar-edit-title h1 {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .danger-button {
+    min-height: 48px;
+    padding-inline: 14px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: normal;
+  }
+  .icon-button {
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 380px) {
+  .page-content {
+    padding-inline: 9px !important;
+  }
+  .plan-accordion-body {
+    padding-inline: 8px !important;
+  }
+  .plan-accordion-toggle {
+    padding-inline: 9px;
+  }
+  .timeline-item {
+    grid-template-columns: 43px 18px minmax(0, 1fr);
+    gap: 5px;
+  }
+  .timeline-title-row.with-place-photo {
+    grid-template-columns: minmax(0, 1fr) 68px;
+  }
+  .timeline-place-photo {
+    width: 68px;
+    height: 60px;
+  }
+
+  .mobile-nav {
+    left: 6px;
+    right: 6px;
+  }
+  .mobile-nav button {
+    min-width: 0;
+  }
+}
+
+.danger-button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid #c84740;
+  border-radius: 12px;
+  background: #c84740;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.today-planning-panel {
+  display: grid;
+  gap: 14px;
+  padding: 15px;
+  border: 1px solid #dce8e3;
+  border-radius: 15px;
+  background: #fbfefd;
+}
+.today-planning-intro { min-width: 0; }
+.today-planning-intro strong { display: block; font-size: 13px; color: var(--ink); }
+.today-planning-intro p { margin: 4px 0 0; max-width: 800px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.today-planning-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.today-planning-grid label { min-width: 0; display: grid; gap: 6px; color: #566762; font-size: 9px; font-weight: 800; }
+.today-planning-grid select {
+  width: 100%; min-width: 0; min-height: 46px; border: 1px solid #d7e2de; border-radius: 11px;
+  background: #fff; padding: 0 12px; color: var(--ink); font: inherit; font-size: 10px;
+}
+.today-planning-summary,
+.today-endpoint-note {
+  min-width: 0; display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px;
+  border-radius: 11px; background: #eef8f4; color: var(--brand);
+}
+.today-endpoint-note { background: #f6f8f7; color: #62716c; }
+.today-endpoint-note.return-base { background: #eef8f4; color: var(--brand); }
+.today-planning-summary > span,
+.today-endpoint-note > span { min-width: 0; display: grid; gap: 2px; }
+.today-planning-summary strong,
+.today-endpoint-note strong { color: var(--ink); font-size: 10px; }
+.today-planning-summary small,
+.today-endpoint-note small { color: var(--muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.today-planning-actions { display: flex; justify-content: flex-end; }
+.today-planning-actions .primary-button { min-width: 220px; }
+
+.timeline-leg-mobile-dropdown { display: none; }
+.timeline-leg-mobile-dropdown summary { list-style: none; }
+.timeline-leg-mobile-dropdown summary::-webkit-details-marker { display: none; }
+
+.app-shell,
+.main-content,
+.page-content,
+.page-section,
+.card,
+.plan-accordion-section,
+.plan-accordion-body,
+.accordion-content-card,
+.accordion-inner-card,
+.inline-form,
+.timeline-card,
+.timeline,
+.timeline-item,
+.timeline-content,
+.timeline-title-row,
+.timeline-title-copy,
+.today-planning-panel,
+.today-planning-grid,
+.arrival-day-transfer,
+.transfer-route-full,
+.day-route-card,
+.day-route-list,
+.day-route-leg,
+.budget-summary-grid,
+.budget-fields,
+.shopping-row,
+.checklist-card,
+.quick-add { min-width: 0; max-width: 100%; }
+.page-content,
+.page-section { overflow-x: clip; }
+button,
+input,
+select,
+textarea,
+a.secondary-button,
+a.primary-button { min-width: 0; max-width: 100%; }
+button,
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button { overflow-wrap: anywhere; }
+input,
+select,
+textarea { width: 100%; }
+img,
+svg { max-width: 100%; }
+.timeline-title-copy strong,
+.timeline-title-copy span,
+.timeline-title-copy small,
+.place-address{ overflow-wrap: anywhere; word-break: normal; }
+
+@media (max-width: 839px) {
+  .today-planning-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .today-planning-grid label:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .today-planning-actions .primary-button { width: 100%; min-width: 0; }
+
+  .arrange-day-actions,
+  .form-actions,
+  .trip-library-actions,
+  .timeline-actions { min-width: 0; }
+  .manual-flight-grid,
+  .details-grid,
+  .travel-window-grid,
+  .hotel-fields,
+  .budget-fields,
+  .expense-form-grid { min-width: 0; }
+}
+
+@media (max-width: 599px) {
+  .timeline-leg-options-desktop { display: none !important; }
+  .timeline-leg-mobile-dropdown {
+    width: 100%; display: block; border: 1px solid #dfe8e4; border-radius: 11px; background: #fff; overflow: hidden;
+  }
+  .timeline-leg-mobile-dropdown summary {
+    min-height: 42px; padding: 9px 11px; display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; color: var(--brand); font-size: 10px; font-weight: 800; cursor: pointer;
+  }
+  .timeline-leg-mobile-dropdown summary > span { min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
+  .timeline-leg-mobile-dropdown[open] summary svg:last-child { transform: rotate(180deg); }
+  .timeline-leg-mobile-menu { display: grid; border-top: 1px solid #edf2ef; }
+  .timeline-leg-mobile-option {
+    min-width: 0; min-height: 42px; padding: 9px 11px; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; border-bottom: 1px solid #f0f3f2; color: #465751; font-size: 9px;
+  }
+  .timeline-leg-mobile-option:last-child { border-bottom: 0; }
+  .timeline-leg-mobile-option > span { min-width: 0; display: inline-flex; align-items: center; gap: 7px; }
+  .timeline-leg-mobile-option strong { flex: 0 0 auto; color: var(--ink); font-size: 9px; }
+  .timeline-leg-mobile-option.muted { color: var(--muted); }
+  .timeline-leg-mobile-retry { width: 100%; min-height: 44px; border: 0; background: #fff; color: var(--brand); font: inherit; font-size: 9px; font-weight: 800; }
+
+  .today-planning-panel { gap: 10px; padding: 10px; }
+  .today-planning-grid { grid-template-columns: minmax(0, 1fr); gap: 9px; }
+  .today-planning-grid label,
+  .today-planning-grid label:last-child:nth-child(odd) { grid-column: auto; }
+  .today-planning-grid select { min-height: 48px; font-size: 11px; }
+  .today-planning-summary,
+  .today-endpoint-note { padding: 10px; }
+  .today-planning-actions .primary-button { width: 100%; min-height: 48px; }
+
+  .timeline-leg-summary { width: 100%; padding: 8px; gap: 7px; }
+  .timeline-leg-destination { width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+  .timeline-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .timeline-actions > * { width: 100%; min-width: 0; justify-content: center; white-space: normal; }
+  .timeline-actions > :nth-child(3) { grid-column: 1 / -1; }
+
+  .form-actions,
+  .arrange-day-actions,
+  .discount-form-actions { width: 100%; display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .form-actions > *,
+  .arrange-day-actions > *,
+  .discount-form-actions > * { width: 100%; min-width: 0; justify-content: center; }
+
+  .manual-flight-grid,
+  .travel-window-grid,
+  .details-grid,
+  .hotel-fields,
+  .budget-fields,
+  .budget-fields-with-currency,
+  .expense-form-grid,
+  .shopping-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .manual-flight-airport-field,
+  .flight-airline-field,
+  .hotel-address-field,
+  .form-full-width,
+  .form-span-2 { grid-column: auto !important; }
+
+  .day-strip { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .day-strip::-webkit-scrollbar { display: none; }
+  .day-strip button { flex: 0 0 auto; min-width: 68px; }
+
+  .timeline-item { grid-template-columns: 48px 20px minmax(0, 1fr); gap: 7px; }
+  .timeline-time strong { font-size: 10px; }
+  .timeline-time span { font-size: 8px; }
+  .timeline-content { min-width: 0; padding-left: 3px; }
+  .timeline-title-row,
+  .timeline-title-row.with-place-photo { min-width: 0; }
+
+  .shopping-location-tabs,
+.bag-tabs,
+.plan-section-nav{ max-width: 100%; overflow-x: auto; }
+
+  .topbar,
+  .editable-topbar,
+  .topbar-title-wrap,
+  .topbar-title-copy,
+  .topbar-edit-title { min-width: 0; }
+  .topbar-edit-title h1 { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .primary-button,
+  .secondary-button,
+  .ghost-button,
+  .danger-button { min-height: 48px; padding-inline: 14px; font-size: 11px; line-height: 1.2; white-space: normal; }
+  .icon-button { flex: 0 0 48px; width: 48px; min-width: 48px; height: 48px; }
+}
+
+@media (max-width: 380px) {
+  .page-content { padding-inline: 9px !important; }
+  .plan-accordion-body { padding-inline: 8px !important; }
+  .plan-accordion-toggle { padding-inline: 9px; }
+  .timeline-item { grid-template-columns: 43px 18px minmax(0, 1fr); gap: 5px; }
+  .timeline-title-row.with-place-photo { grid-template-columns: minmax(0, 1fr) 68px; }
+  .timeline-place-photo { width: 68px; height: 60px; }
+
+  .mobile-nav { left: 6px; right: 6px; }
+  .mobile-nav button { min-width: 0; }
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
+}
+
+.sidebar {
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.main-content,
+.page-content,
+.page-section {
+  width: 100%;
+  max-width: 100%;
+}
+
+.view-error-card {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.view-error-card > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.view-error-copy {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+.view-error-copy > strong { font-size: 16px; }
+.view-error-copy > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.view-error-actions {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Any row that can receive user-generated text must be allowed to shrink. */
+.topbar > *,
+.editable-topbar > *,
+.section-heading-row > *,
+.place-row > *,
+.shopping-row > *,
+.discount-row > *,
+.timeline-item > *,
+.timeline-title-row > *,
+.route-option > *,
+.route-details-title > *,
+.hotel-card-header > *,
+.flight-card-header > *,
+.manual-flight-grid > *,
+.hotel-fields > *,
+.budget-fields > *,
+.expense-form-grid > *,
+.shopping-form-grid > *,
+.quick-add > *,
+.buy-add > *,
+.bag-tabs-row > * {
+  min-width: 0;
+}
+
+/* Prevent long labels, addresses and prices from pushing a card wider than its parent. */
+.place-title-row,
+.place-address,
+.mapped-location,
+.trip-library-copy,
+.route-option,
+.route-unavailable-copy,
+.transit-fact,
+.shopping-main,
+.discount-main,
+.timeline-title-copy,
+.hotel-card-header,
+.flight-title-line,
+.google-text-result,
+.google-text-result span,
+.regional-transit-copy,
+.regional-transit-actions,
+.today-planning-summary,
+.today-endpoint-note{
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* Inputs should never create horizontal overflow. */
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+/* Desktop/tablet rail should remain stable while the document scrolls. */
+@media (min-width: 721px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+  }
+}
+
+/* Tablet-specific reflow: keep the rail, but avoid desktop-density forms. */
+@media (min-width: 600px) and (max-width: 839px) {
+  .page-content {
+    padding: 24px 22px 110px;
+  }
+  .topbar {
+    padding-inline: 22px;
+  }
+  .manual-flight-grid,
+  .hotel-fields,
+  .budget-fields,
+  .budget-fields-with-currency,
+  .expense-form-grid,
+  .shopping-form-grid,
+  .daily-budget-metrics,
+  .today-planning-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .manual-flight-airport-field,
+  .flight-airline-field,
+  .hotel-address-field,
+  .form-full-width,
+  .form-span-2 {
+    grid-column: 1 / -1 !important;
+  }
+  .route-option-grid.route-option-grid-dynamic,
+  .budget-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shopping-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(120px, 150px) 48px;
+  }
+  .shopping-date-field {
+    grid-column: 2 / 4;
+  }
+}
+
+/* Compact/mobile window class. */
+@media (max-width: 599px) {
+  body {
+    min-width: 0;
+  }
+
+  /* iOS: 16px form text avoids unwanted viewport zoom while editing. */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+    font-size: 16px !important;
+  }
+
+  .topbar {
+    min-height: calc(68px + env(safe-area-inset-top));
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+    gap: 10px;
+  }
+  .topbar-title-wrap {
+    width: 100%;
+    gap: 8px;
+  }
+  .topbar-title-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .topbar-edit-title {
+    width: 100%;
+    max-width: 100% !important;
+  }
+  .topbar-edit-title h1 {
+    font-size: clamp(17px, 5vw, 20px);
+  }
+  .topbar-title-input {
+    width: 100% !important;
+    max-width: 100%;
+    font-size: 16px !important;
+  }
+  .topbar-back {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Date editor becomes a one-column sheet instead of a squeezed mini-grid. */
+  .topbar-date-editor {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    top: calc(70px + env(safe-area-inset-top)) !important;
+    width: auto !important;
+    max-width: none !important;
+    z-index: 150;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px;
+    padding: 12px;
+    box-shadow: 0 18px 50px rgba(20,45,38,.18);
+  }
+  .topbar-date-editor > span { display: none !important; }
+  .topbar-date-editor label,
+  .topbar-date-editor input,
+  .topbar-date-editor .icon-button {
+    width: 100%;
+    max-width: 100%;
+  }
+  .topbar-date-editor .icon-button {
+    min-height: 46px;
+  }
+
+  .page-content {
+    padding: 14px 12px calc(112px + env(safe-area-inset-bottom)) !important;
+  }
+  .page-section {
+    gap: 16px;
+  }
+
+  /* Sticky Plan subnav sits below the safe-area-aware trip header. */
+  .plan-section-nav {
+    top: calc(68px + env(safe-area-inset-top)) !important;
+    z-index: 90;
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0 !important;
+    padding: 6px;
+    border-radius: 14px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .plan-section-nav::-webkit-scrollbar { display: none; }
+  .plan-section-nav button {
+    flex: 0 0 50px !important;
+    min-width: 50px !important;
+    width: 50px;
+    min-height: 48px;
+    padding: 0 !important;
+    display: grid;
+    place-items: center;
+  }
+  .plan-scroll-anchor,
+  .plan-accordion-section {
+    scroll-margin-top: calc(132px + env(safe-area-inset-top));
+  }
+
+  /* Main navigation respects iPhone/Android gesture areas. */
+  .mobile-nav {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    width: auto;
+    padding: 6px 6px max(6px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .mobile-nav button {
+    min-width: 0 !important;
+    width: 100%;
+    min-height: 50px;
+    padding: 6px 1px;
+    overflow: hidden;
+  }
+  .mobile-nav button span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Cards and accordions should use available width without nested overflow. */
+  .card,
+  .hero-card,
+  .today-status-card,
+  .editable-card,
+  .flight-card,
+  .hotel-card,
+  .budget-control-card,
+  .daily-budget-card,
+  .shopping-card,
+  .checklist-card,
+  .timeline-card,
+  .plan-accordion-section,
+  .accordion-inner-card,
+  .accordion-content-card {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 15px;
+  }
+  .hero-card,
+  .editable-card,
+  .flight-card,
+  .hotel-card,
+  .budget-control-card,
+  .daily-budget-card,
+  .shopping-card,
+  .checklist-card,
+  .timeline-card {
+    padding: 14px !important;
+  }
+
+  .plan-accordion-toggle {
+    min-height: 60px;
+    padding: 10px;
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  }
+  .plan-accordion-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .plan-accordion-copy small {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .plan-accordion-body {
+    padding: 10px 10px 12px !important;
+  }
+
+  /* All dense forms collapse before they can overflow. */
+  .manual-flight-grid,
+  .flight-fields,
+  .hotel-fields,
+  .travel-window-grid,
+  .details-grid,
+  .budget-fields,
+  .budget-fields-with-currency,
+  .expense-form-grid,
+  .shopping-form-grid,
+  .daily-budget-metrics,
+  .today-planning-grid,
+  .two-column-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .manual-flight-airport-field,
+  .flight-airline-field,
+  .hotel-address-field,
+  .form-full-width,
+  .form-span-2,
+  .hotel-name-field {
+    grid-column: auto !important;
+  }
+
+  /* Flight / hotel headers recompose rather than squeeze. */
+  .simplified-flight-header,
+  .flight-card-header,
+  .hotel-card-header {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    gap: 9px;
+  }
+  .flight-title-line {
+    align-items: flex-start;
+    gap: 5px;
+  }
+  .flight-title-line .coming-soon-pill {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  /* Timeline gets a narrower rail and a fluid content column. */
+  .timeline-card {
+    overflow: hidden;
+  }
+  .timeline-item {
+    grid-template-columns: 42px 18px minmax(0, 1fr) !important;
+    gap: 5px !important;
+  }
+  .timeline-time {
+    min-width: 0;
+  }
+  .timeline-time strong {
+    font-size: 10px;
+  }
+  .timeline-content {
+    min-width: 0;
+    padding-left: 2px;
+  }
+  .timeline-title-row,
+  .timeline-title-row.with-place-photo {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .timeline-place-photo {
+    width: 100%;
+    height: min(42vw, 150px);
+    max-height: 150px;
+    margin-top: 8px;
+    border-radius: 12px;
+    object-fit: cover;
+  }
+  .timeline-actions {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .timeline-actions > * {
+    width: 100%;
+    min-width: 0;
+  }
+  .timeline-actions > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  /* Transport details: one horizontally swipeable choice row; details stay below. */
+  .route-option-grid.route-option-grid-dynamic {
+    display: flex !important;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 1px 6px;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .route-option-grid.route-option-grid-dynamic::-webkit-scrollbar { display: none; }
+  .route-option-grid.route-option-grid-dynamic .route-option {
+    flex: 0 0 min(76vw, 240px);
+    width: min(76vw, 240px);
+    max-width: min(76vw, 240px);
+    scroll-snap-align: start;
+  }
+  .route-distance-banner,
+  .route-details-title,
+  .route-simple-copy,
+  .route-why-recommended,
+  .regional-transit-fallback,
+  .transit-facts {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .route-distance-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .route-distance-banner b {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .route-details-title {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .route-details-title > div:first-child {
+    min-width: 0;
+  }
+  .route-details-title .route-refresh {
+    flex: 0 0 auto;
+  }
+  .route-simple-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px;
+  }
+  .route-simple-copy .secondary-button,
+  .walk-map-link {
+    width: 100%;
+  }
+  .regional-transit-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .regional-transit-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+  .transit-facts {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Budget, shopping and checklist controls should stack cleanly. */
+  .budget-summary-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .shopping-row {
+    grid-template-columns: 40px minmax(0, 1fr) 44px !important;
+    align-items: start;
+  }
+  .shopping-main,
+  .actual-price-field,
+  .shopping-date-field {
+    grid-column: 2 !important;
+    width: 100% !important;
+  }
+  .shopping-delete-button {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+  }
+  .buy-add,
+  .quick-add {
+    grid-template-columns: minmax(0, 1fr) 48px !important;
+  }
+  .buy-add > input:first-child {
+    grid-column: 1 / -1;
+  }
+  .bag-tabs-row {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .bag-tabs-row .bag-tabs {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .add-bag-tab-button {
+    order: 2;
+    width: 100%;
+  }
+
+  /* Dialogs become bottom sheets and never exceed the visual viewport. */
+
+  .view-error-actions{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .view-error-actions > *{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .view-error-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  /* Horizontal tab/strip components are intentionally scrollable rather than clipped. */
+  .day-strip,
+.budget-day-strip,
+.bag-tabs,
+.shopping-location-tabs{
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .day-strip::-webkit-scrollbar,
+.budget-day-strip::-webkit-scrollbar,
+.bag-tabs::-webkit-scrollbar,
+.shopping-location-tabs::-webkit-scrollbar{ display: none; }
+}
+
+/* Very small phones: reduce decorative spacing before reducing usability. */
+@media (max-width: 359px) {
+  .page-content {
+    padding-inline: 8px !important;
+  }
+  .topbar {
+    padding-inline: 8px;
+  }
+  .plan-section-nav {
+    padding-inline: 4px;
+  }
+  .plan-section-nav button {
+    flex-basis: 46px !important;
+    min-width: 46px !important;
+    width: 46px;
+  }
+  .timeline-item {
+    grid-template-columns: 38px 16px minmax(0, 1fr) !important;
+  }
+  .timeline-time strong { font-size: 9px; }
+  .timeline-time span { font-size: 8px; }
+  .route-option-grid.route-option-grid-dynamic .route-option {
+    flex-basis: min(82vw, 220px);
+    width: min(82vw, 220px);
+    max-width: min(82vw, 220px);
+  }
+  .mobile-nav {
+    left: 5px !important;
+    right: 5px !important;
+  }
+  .mobile-nav button span {
+    font-size: 8px;
+  }
+}
+
+/* Keep the v2.2 fixed desktop/tablet app rail as the final cascade winner. */
+@media (min-width: 721px) {
+  .sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0;
+    top: 0;
+    align-self: auto;
+  }
+}
+
+:root {
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --type-xs: 0.72rem;
+  --type-sm: 0.80rem;
+  --type-md: 0.90rem;
+  --type-lg: 1rem;
+  --type-xl: 1.22rem;
+  --type-2xl: 1.65rem;
+  --control-h: 44px;
+}
+
+html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
+body { font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+
+/* The old Plan jump bar is intentionally retired. */
+.plan-section-nav { display: none !important; }
+.plan-scroll-anchor,
+.plan-accordion-section { scroll-margin-top: 96px; }
+
+/* Prevent the fixed rail + main area from becoming wider than the viewport. */
+@media (min-width: 981px) {
+  .main-content {
+    width: calc(100vw - 245px) !important;
+    max-width: calc(100vw - 245px) !important;
+    margin-left: 245px !important;
+    overflow-x: clip;
+  }
+}
+@media (min-width: 721px) and (max-width: 980px) {
+  .main-content {
+    width: calc(100vw - 82px) !important;
+    max-width: calc(100vw - 82px) !important;
+    margin-left: 82px !important;
+    overflow-x: clip;
+  }
+}
+.topbar { width: 100%; max-width: 100%; }
+.page-content {
+  width: 100%;
+  max-width: 1500px;
+  padding-inline: clamp(20px, 3vw, 46px);
+}
+@media (min-width: 1500px) {
+  .page-content { max-width: 1560px; }
+}
+
+/* One type system instead of each component inventing its own size. */
+.eyebrow { font-size: var(--type-xs); line-height: 1.2; }
+.topbar h1 { font-size: var(--type-xl); }
+.hero-card h2,
+.today-status-card h2 { font-size: clamp(1.45rem, 2vw, 1.9rem); line-height: 1.08; }
+.hero-card p,
+.today-status-card p,
+.section-heading p { font-size: var(--type-sm); }
+.section-heading h3 { font-size: var(--type-xl); }
+.plan-accordion-copy strong,
+.timeline-title-copy > strong,
+.flight-title-line strong,
+.hotel-card-header strong { font-size: var(--type-md); }
+.plan-accordion-copy small,
+.timeline-title-copy > span,
+.timeline-title-copy > small,
+.place-address,
+.mapped-location span { font-size: var(--type-xs); line-height: 1.45; }
+
+.primary-button,
+.secondary-button,
+.ghost-button,
+.danger-button {
+  min-height: var(--control-h);
+  padding: 0 14px;
+  border-radius: 11px;
+  font-size: var(--type-sm);
+  font-weight: 750;
+  line-height: 1.2;
+}
+.icon-button {
+  width: var(--control-h);
+  min-width: var(--control-h);
+  height: var(--control-h);
+  border-radius: 11px;
+}
+
+/* Consistent field scale + a select arrow with actual breathing room. */
+input,
+select,
+textarea {
+  min-height: var(--control-h);
+  border-radius: 11px;
+  font-family: var(--font-ui);
+  font-size: var(--type-md);
+  font-weight: 600;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-left: 12px !important;
+  padding-right: 38px !important;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23546660' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+}
+.today-planning-grid label { font-size: var(--type-xs); font-weight: 750; }
+.today-planning-grid select { font-size: var(--type-md); font-weight: 650; min-height: var(--control-h); }
+
+/* Source/debug branding is not part of the traveler UI. Provider-required Maps attribution remains discreet. */
+.google-source-pill,
+.route-provider-note:not(.route-provider-note-estimate) { display: none !important; }
+.maps-attribution,
+.google-suggestions-footer.maps-attribution {
+  width: 100%;
+  padding: 5px 8px 2px;
+  color: #7a8581;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+  letter-spacing: 0;
+}
+
+/* More usable desktop density: content should occupy the available canvas, not float in oversized whitespace. */
+.plan-editor-page,
+.timeline-card,
+.day-route-card,
+.budget-page,
+.checklist-card,
+.plan-accordion-section { width: 100%; }
+.plan-hero-card { min-height: 132px; padding: 22px 24px; }
+.plan-accordion-toggle { min-height: 64px; padding: 12px 14px; }
+.plan-accordion-body { padding: 12px 14px 14px; }
+.accordion-content-card,
+.accordion-inner-card { width: 100%; }
+.details-grid,
+.travel-window-grid { gap: 12px; }
+
+/* Minimal bag controls: name gets the space, delete is one clear icon action. */
+.bag-panel .bag-organizer-head,
+.bag-organizer-head {
+  width: 100%;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end !important;
+  gap: 10px;
+}
+.bag-panel .bag-organizer-head label,
+.bag-organizer-head label { width: 100% !important; max-width: none !important; }
+.bag-delete-button { align-self: end; }
+.bag-panel { padding: 12px !important; }
+.bag-panel .bag-checklist-items .checklist-item.bag-item { min-height: 42px; }
+.empty-bag { padding-block: 22px !important; }
+
+/* Wanderlog-style discovery: visual cards, horizontal browse, compact add action. */
+
+/* Small/medium layouts should reflow instead of clipping. */
+@media (max-width: 839px) {
+  .page-content { padding-inline: 16px !important; }
+  .plan-hero-card { padding: 18px; }
+  .today-planning-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .today-planning-grid label,
+  .today-planning-grid label:last-child:nth-child(odd) { grid-column: auto !important; }
+}
+
+@media (max-width: 599px) {
+  :root { --control-h: 44px; }
+  body { font-size: 13px; }
+  .page-content { padding-inline: 10px !important; }
+  .hero-card h2,
+  .today-status-card h2 { font-size: 1.35rem; }
+  .section-heading h3 { font-size: 1.08rem; }
+  .plan-hero-card { padding: 15px; border-radius: 15px; }
+  .plan-accordion-toggle { min-height: 58px; padding: 10px; }
+  .plan-accordion-body { padding: 10px 9px 10px; }
+
+  /* 16px keeps iOS from zooming; weight/spacing keep it visually restrained. */
+  input,
+  select,
+  textarea { font-size: 16px !important; font-weight: 550 !important; }
+  .today-planning-grid select { font-size: 16px !important; font-weight: 600 !important; }
+
+  .today-planning-panel { padding: 9px; gap: 9px; }
+  .today-planning-intro strong { font-size: var(--type-md); }
+  .today-planning-intro p { font-size: var(--type-xs); }
+  .today-planning-summary strong,
+  .today-endpoint-note strong { font-size: var(--type-sm); }
+  .today-planning-summary small,
+  .today-endpoint-note small { font-size: var(--type-xs); }
+
+  .bag-panel .bag-organizer-head,
+  .bag-organizer-head { grid-template-columns: minmax(0, 1fr) 44px !important; align-items: end !important; }
+  .bag-delete-button { width: 44px !important; min-width: 44px !important; height: 44px !important; }
+}
+
+/* Required photo attribution stays inside the image rather than becoming another UI row. */
+
+.place-photo figcaption .photo-maps-attribution { margin-left: auto; flex: 0 0 auto; opacity: .9; }
+
+.place-photo-empty {
+  width: 100%;
+  height: 100%;
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,.85), transparent 32%),
+    linear-gradient(145deg, #eef7f3, #dfeee8);
+  color: #5f7c72;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* Nearby cards: text left, image right, never crush copy when a photo is unavailable. */
+
+/* Phone timeline: never place a photo beside narrow itinerary text. */
+@media (max-width: 599px) {
+  .timeline-card {
+    padding-inline: 10px !important;
+  }
+  .timeline-item,
+  .timeline-item:not(.anything) {
+    grid-template-columns: 42px 14px minmax(0, 1fr) !important;
+    gap: 5px !important;
+  }
+  .timeline-time {
+    min-width: 0;
+  }
+  .timeline-time strong {
+    font-size: 9px !important;
+    line-height: 1.2;
+  }
+  .timeline-time span,
+  .timeline-edit-time {
+    font-size: 7px !important;
+    line-height: 1.25;
+  }
+  .timeline-track {
+    min-width: 0;
+  }
+  .timeline-dot {
+    width: 20px;
+    height: 20px;
+    margin-left: -3px;
+  }
+  .timeline-line {
+    top: 19px;
+  }
+  .timeline-content {
+    width: 100%;
+    min-width: 0;
+    padding: 0 0 18px 2px !important;
+  }
+  .timeline-title-row,
+  .timeline-title-row.with-place-photo {
+    width: 100%;
+    min-width: 0;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 28px !important;
+    grid-auto-rows: auto;
+    gap: 6px 8px !important;
+    align-items: start;
+  }
+  .timeline-title-copy {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    padding: 0 !important;
+  }
+  .timeline-title-copy strong {
+    font-size: 12px !important;
+    line-height: 1.3;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    hyphens: auto;
+  }
+  .timeline-title-copy span,
+  .timeline-title-copy small {
+    font-size: 9px !important;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .timeline-title-row > .status-icon,
+  .timeline-title-row.with-place-photo > .status-icon {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: end;
+    width: 28px;
+    height: 28px;
+  }
+  .timeline-place-photo {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    height: 112px !important;
+    min-height: 112px !important;
+    margin-top: 2px;
+    justify-self: stretch !important;
+  }
+  .timeline-place-photo figcaption {
+    max-width: calc(100% - 8px);
+  }
+  .timeline-actions {
+    margin-top: 9px;
+  }
+  .timeline-leg-summary {
+    min-width: 0;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 379px) {
+  .timeline-item,
+  .timeline-item:not(.anything) {
+    grid-template-columns: 36px 12px minmax(0, 1fr) !important;
+    gap: 4px !important;
+  }
+  .timeline-dot {
+    width: 18px;
+    height: 18px;
+    margin-left: -3px;
+  }
+  .timeline-place-photo {
+    height: 96px !important;
+    min-height: 96px !important;
   }
 }
