@@ -1,0 +1,7 @@
+name = "diy-travel-maps"
+main = "src/index.js"
+compatibility_date = "2026-09-15"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173"
+MAX_REQUESTS_PER_MINUTE = "60"

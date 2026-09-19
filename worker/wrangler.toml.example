@@ -1,0 +1,13 @@
+name = "diy-travel-maps"
+main = "src/index.js"
+compatibility_date = "2026-09-15"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,https://bdisccc.github.io,https://diy-travel.pages.dev"
+MAX_REQUESTS_PER_MINUTE = "60"
+
+# Optional in production once you run your own MOTIS instance:
+# MOTIS_BASE_URL = "https://your-motis.example.com"
+
+# Secrets are NOT stored here. Add HeiGIT with:
+# npx wrangler secret put HEIGIT_API_KEY

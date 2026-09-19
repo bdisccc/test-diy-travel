@@ -166,7 +166,7 @@
   backdrop-filter: blur(4px);
 }
 
-.nearby-card .nearby-photo .photo-maps-attribution {
+.nearby-card .nearby-photo .photo-source {
   display: none;
 }
 

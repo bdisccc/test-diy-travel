@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Sparkles, X } from 'lucide-react'
-import '../styles/dialog.css'
 
 export default function AppDialog({
   open,

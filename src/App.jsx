@@ -1,24 +1,21 @@
-import { Component, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlarmClock,
   ArrowLeft,
   BedDouble,
-  BusFront,
   CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleDollarSign,
   Copy,
-  Car,
   Clock3,
   ExternalLink,
-  Footprints,
   FolderOpen,
   Hotel,
   ListChecks,
-  Map as MapIcon,
   LoaderCircle,
+  Map as MapIcon,
   MapPin,
   Navigation,
   PackageCheck,
@@ -26,8 +23,6 @@ import {
   Plane,
   Plus,
   RotateCcw,
-  Search,
-  Ship,
   ShoppingBag,
   Sparkles,
   TrainFront,
@@ -35,153 +30,72 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { getGooglePlaceDetails, hasGoogleMapsKey, searchGoogleNearbyPlaces, searchGooglePlaces } from './googleMaps.js'
 import AppDialog from './components/AppDialog.jsx'
 import PlacePhoto from './components/PlacePhoto.jsx'
+import LocationSearch from './components/LocationSearch.jsx'
+import TripMap from './components/TripMap.jsx'
+import ViewErrorBoundary from './components/common/ViewErrorBoundary.jsx'
+import { AirportLocationField, MappedLocationSummary } from './components/location/TripLocationFields.jsx'
+import { InAppRouteRecommendations, NearbyTransportStops, TimelineLegSummary } from './components/transport/TransportPanels.jsx'
 import { installButtonDebugger } from './debug/buttonDebug.js'
-import './styles/nearby.css'
-import { getRouteComparison } from './routes.js'
-import { regionalTransitSource } from './regionalTransit.js'
-
-const STORAGE_KEY = 'diy-travel-app-v1'
-const PLAN_LIBRARY_KEY = 'diy-travel-plan-library-v1'
-const ACTIVE_PLAN_KEY = 'diy-travel-active-plan-v1'
-const NAVIGATION_STATE_KEY = 'diy-travel-navigation-state-v1'
-
-const emptyMapFields = {
-  address: '',
-  googlePlaceId: '',
-  latitude: null,
-  longitude: null,
-  googleMapsURI: '',
-  websiteURI: '',
-  utcOffsetMinutes: null,
-  source: 'manual',
-}
-
-const demoState = {
-  trip: {
-    name: 'Taiwan DIY Trip',
-    city: 'Taiwan',
-    startDate: '2026-12-05',
-    endDate: '2026-12-11',
-    currency: 'NT$',
-    homeCurrency: '₱',
-    dayStartPreferences: {},
-    dayArrangementPreferences: {},
-    arrival: {
-      type: 'Flight',
-      airline: '',
-      flightNumber: '',
-      from: 'Manila',
-      location: 'Kaohsiung International Airport',
-      date: '2026-12-05',
-      time: '19:10',
-      transferBufferMinutes: 60,
-      ...emptyMapFields,
-    },
-    departure: {
-      type: 'Flight',
-      airline: '',
-      flightNumber: '',
-      to: 'Manila',
-      location: 'Kaohsiung International Airport',
-      date: '2026-12-11',
-      time: '11:40',
-      ...emptyMapFields,
-    },
-    hotels: [
-      {
-        id: 401,
-        name: 'Ximending Hotel',
-        checkInDate: '2026-12-07',
-        checkIn: '15:00',
-        checkOutDate: '2026-12-10',
-        checkOut: '11:00',
-        ...emptyMapFields,
-      },
-    ],
-  },
-  places: [
-    {
-      id: 1,
-      name: 'Chiang Kai-shek Memorial Hall',
-      category: 'Attraction',
-      open: '09:00',
-      close: '18:00',
-      duration: 90,
-      priority: 'Must Visit',
-      visitDate: '2026-12-08',
-      plannedStart: '09:15',
-      ...emptyMapFields,
-    },
-    {
-      id: 2,
-      name: 'Taipei 101',
-      category: 'Attraction',
-      open: '11:00',
-      close: '21:30',
-      duration: 120,
-      priority: 'High',
-      visitDate: '2026-12-08',
-      plannedStart: '11:20',
-      ...emptyMapFields,
-    },
-    {
-      id: 3,
-      name: 'Ximending',
-      category: 'Shopping',
-      open: '11:00',
-      close: '23:00',
-      duration: 150,
-      priority: 'High',
-      visitDate: '2026-12-08',
-      plannedStart: '16:30',
-      ...emptyMapFields,
-    },
-    {
-      id: 4,
-      name: 'Shilin Night Market',
-      category: 'Food',
-      open: '16:00',
-      close: '00:00',
-      duration: 120,
-      priority: 'Optional',
-      visitDate: '2026-12-09',
-      plannedStart: '18:00',
-      ...emptyMapFields,
-    },
-  ],
-  progress: {},
-  budget: {
-    total: 20000,
-    shopping: 6000,
-    spentOther: 2590,
-    dailyTargets: {},
-    discounts: [],
-  },
-  shopping: [
-    { id: 201, name: 'EasyCard', planned: 500, actual: 500, quantity: 1, priority: 'Must Buy', bought: true },
-    { id: 202, name: 'Sneakers', planned: 2500, actual: 0, quantity: 1, priority: 'Want', bought: false },
-    { id: 203, name: 'Pineapple cakes', planned: 450, actual: 0, quantity: 2, priority: 'Must Buy', bought: false },
-    { id: 204, name: 'Random anime stuff', planned: 1000, actual: 0, quantity: 1, priority: 'If Budget Allows', bought: false },
-  ],
-  packingBags: [
-    { id: 'bag-carry-on', name: 'Carry-on' },
-    { id: 'bag-day', name: 'Day bag' },
-  ],
-  packing: [
-    { id: 301, name: 'Passport', checked: true, bagId: 'bag-carry-on' },
-    { id: 302, name: 'Power bank', checked: true, bagId: 'bag-day' },
-    { id: 303, name: 'Universal adapter', checked: false, bagId: 'bag-carry-on' },
-    { id: 304, name: 'Umbrella', checked: false, bagId: 'bag-day' },
-    { id: 305, name: 'Medicine', checked: false, bagId: 'bag-day' },
-  ],
-  expenses: [
-    { id: 501, date: '2026-12-08', category: 'Food', note: 'Lunch', amount: 320 },
-    { id: 502, date: '2026-12-08', category: 'Transport', note: 'MRT / EasyCard top-up', amount: 180 },
-  ],
-}
+import { installMapUsageDebugger } from './debug/mapUsageDebug.js'
+import {
+  clusterLocations,
+  getNearbyPlaces,
+  locationFields,
+  locationMapUrl,
+  rankNearbyPlaces,
+} from './services/maps/index.js'
+import {
+  ACTIVE_PLAN_KEY,
+  NAVIGATION_STATE_KEY,
+  PLAN_LIBRARY_KEY,
+  STORAGE_KEY,
+  clone,
+  createBlankTripData,
+  demoState,
+  getPlanStatus,
+  loadInitialWorkspace,
+  normalizeData,
+  planRecord,
+  safeStorageRemove,
+  safeStorageSet,
+} from './app/tripData.js'
+import { loadNavigationState } from './app/navigationState.js'
+import { exportTripCsv, exportTripExcel, exportTripPdf } from './services/export/tripExport.js'
+import {
+  addMinutes,
+  applyAllSmartSuggestions,
+  applySmartSuggestionsForDate,
+  arrangementLabel,
+  buildBasicDayItems,
+  buildDayItems,
+  clockToMinutes,
+  createBlankHotel,
+  createBlankPlaceForm,
+  dayArrangementPreference,
+  dayStartPreference,
+  dayStartPreferenceLabel,
+  enumerateDates,
+  estimateTransferMinutes,
+  findNextAvailableDay,
+  firstHotelForArrival,
+  hotelForDate,
+  inferPlaceCategory,
+  isMapped,
+  isPlaceAlreadySaved,
+  placeIdentityKeys,
+  placeWithDateHours,
+  smartPlaceSchedule,
+  transportDescriptor,
+} from './services/scheduling/tripSchedule.js'
+import {
+  formatDate,
+  formatDayName,
+  formatMoney,
+  formatNearbyDistance,
+  formatShortDate,
+} from './utils/formatters.js'
 
 const navItems = [
   { id: 'plan', label: 'Plan', icon: MapIcon },
@@ -204,1597 +118,6 @@ const CURRENCY_OPTIONS = [
   { value: '£', label: '£ · British Pound' },
 ]
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value))
-}
-
-function safeStorageSet(key, value) {
-  try {
-    localStorage.setItem(key, value)
-    return true
-  } catch (error) {
-    console.warn(`DIY Travel could not save ${key}:`, error)
-    return false
-  }
-}
-
-function safeStorageRemove(key) {
-  try {
-    localStorage.removeItem(key)
-  } catch (error) {
-    console.warn(`DIY Travel could not remove ${key}:`, error)
-  }
-}
-
-class ViewErrorBoundary extends Component {
-  constructor(props) {
-    super(props)
-    this.state = { error: null }
-  }
-
-  static getDerivedStateFromError(error) {
-    return { error }
-  }
-
-  componentDidCatch(error, info) {
-    console.error('DIY Travel view recovered from a render error:', error, info)
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <section className="page-section">
-          <div className="card view-error-card">
-            <Sparkles size={22} />
-            <div className="view-error-copy">
-              <strong>This section ran into a display problem.</strong>
-              <span>Your trip data is still saved. You can retry this section or return to your trip list without losing your plan.</span>
-              <div className="view-error-actions">
-                <button type="button" className="primary-button" onClick={() => this.setState({ error: null })}>Try again</button>
-                {this.props.onBack && <button type="button" className="ghost-button" onClick={this.props.onBack}>Back to trips</button>}
-              </div>
-            </div>
-          </div>
-        </section>
-      )
-    }
-    return this.props.children
-  }
-}
-
-function normalizeData(saved) {
-  if (!saved || typeof saved !== 'object') return clone(demoState)
-  const base = clone(demoState)
-  const savedTrip = saved.trip || {}
-  const arrival = { ...base.trip.arrival, ...(savedTrip.arrival || {}) }
-  const departure = { ...base.trip.departure, ...(savedTrip.departure || {}) }
-
-  let hotels = savedTrip.hotels
-  if (!Array.isArray(hotels)) {
-    const oldHotel = savedTrip.hotel
-    hotels = oldHotel
-      ? [{
-          id: 401,
-          ...emptyMapFields,
-          name: oldHotel.name || '',
-          checkInDate: savedTrip.startDate || arrival.date || base.trip.startDate,
-          checkIn: oldHotel.checkIn || '15:00',
-          checkOutDate: savedTrip.endDate || departure.date || base.trip.endDate,
-          checkOut: oldHotel.checkOut || '11:00',
-        }]
-      : base.trip.hotels
-  }
-
-  const startDate = savedTrip.startDate || arrival.date || base.trip.startDate
-  const endDate = savedTrip.endDate || departure.date || base.trip.endDate
-
-  return {
-    ...base,
-    ...saved,
-    trip: {
-      ...base.trip,
-      ...savedTrip,
-      startDate,
-      endDate,
-      dayStartPreferences: { ...(base.trip.dayStartPreferences || {}), ...(savedTrip.dayStartPreferences || {}) },
-      dayArrangementPreferences: { ...(base.trip.dayArrangementPreferences || {}), ...(savedTrip.dayArrangementPreferences || {}) },
-      arrival: { ...arrival, date: arrival.date || startDate },
-      departure: { ...departure, date: departure.date || endDate },
-      hotels: hotels.map((hotel, index) => ({
-        id: hotel.id || Date.now() + index,
-        ...emptyMapFields,
-        checkInDate: startDate,
-        checkIn: '15:00',
-        checkOutDate: endDate,
-        checkOut: '11:00',
-        ...hotel,
-      })),
-    },
-    places: (saved.places || base.places).map((place, index) => ({
-      ...emptyMapFields,
-      visitDate: startDate,
-      plannedStart: '',
-      suggestedStart: '',
-      duration: 60,
-      priority: 'High',
-      category: 'Attraction',
-      ...place,
-      id: place.id || Date.now() + index,
-      timeSource: place.timeSource || 'suggested',
-      hoursStatus: place.hoursStatus || (/closed/i.test(place.hoursSummary || '')
-        ? 'closed'
-        : (place.source === 'google' && place.regularOpeningHours
-          ? 'open'
-          : ((place.open || place.close) ? 'manual' : 'unavailable'))),
-    })),
-    progress: saved.progress || {},
-    budget: {
-      ...base.budget,
-      ...(saved.budget || {}),
-      dailyTargets: { ...(base.budget.dailyTargets || {}), ...((saved.budget || {}).dailyTargets || {}) },
-      discounts: Array.isArray((saved.budget || {}).discounts) ? (saved.budget || {}).discounts : [],
-    },
-    shopping: (saved.shopping || base.shopping).map((item) => ({ purchaseDate: '', location: '', ...item })),
-    packingBags: (() => {
-      const existing = Array.isArray(saved.packingBags) && saved.packingBags.length
-        ? saved.packingBags
-        : (base.packingBags?.length ? base.packingBags : [{ id: 'bag-main', name: 'Main bag' }])
-      return existing.map((bag, index) => ({ id: bag.id || `bag-${index + 1}`, name: bag.name || `Bag ${index + 1}` }))
-    })(),
-    packing: (() => {
-      const bags = Array.isArray(saved.packingBags) && saved.packingBags.length
-        ? saved.packingBags
-        : (base.packingBags?.length ? base.packingBags : [{ id: 'bag-main', name: 'Main bag' }])
-      const defaultBagId = bags[0]?.id || 'bag-main'
-      return (saved.packing || base.packing).map((item) => ({ ...item, bagId: item.bagId || defaultBagId }))
-    })(),
-    expenses: Array.isArray(saved.expenses) ? saved.expenses : [],
-  }
-}
-
-function isoToday() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-}
-
-function makePlanId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
-  return `plan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function planRecord(data, id = makePlanId(), createdAt = new Date().toISOString()) {
-  return {
-    id,
-    createdAt,
-    updatedAt: new Date().toISOString(),
-    data: clone(normalizeData(data)),
-  }
-}
-
-function createBlankTripData() {
-  const start = new Date()
-  start.setHours(12, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(end.getDate() + 5)
-  const startDate = start.toISOString().slice(0, 10)
-  const endDate = end.toISOString().slice(0, 10)
-  const base = clone(demoState)
-  return normalizeData({
-    ...base,
-    trip: {
-      ...base.trip,
-      name: 'Untitled DIY Trip',
-      city: '',
-      startDate,
-      endDate,
-      arrival: {
-        ...base.trip.arrival,
-        airline: '',
-        flightNumber: '',
-        from: '',
-        location: '',
-        date: startDate,
-        time: '',
-        ...emptyMapFields,
-      },
-      departure: {
-        ...base.trip.departure,
-        airline: '',
-        flightNumber: '',
-        to: '',
-        location: '',
-        date: endDate,
-        time: '',
-        ...emptyMapFields,
-      },
-      hotels: [],
-    },
-    places: [],
-    progress: {},
-    shopping: [],
-    packingBags: [{ id: 'bag-main', name: 'Main bag' }],
-    packing: [],
-    expenses: [],
-    budget: { total: 0, shopping: 0, spentOther: 0, dailyTargets: {}, discounts: [] },
-  })
-}
-
-function getPlanStatus(data) {
-  const today = isoToday()
-  const start = data?.trip?.startDate || ''
-  const end = data?.trip?.endDate || ''
-  if (end && end < today) return 'past'
-  if (start && start > today) return 'future'
-  return 'current'
-}
-
-function loadInitialWorkspace() {
-  let current
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    current = saved ? normalizeData(JSON.parse(saved)) : clone(demoState)
-  } catch {
-    current = clone(demoState)
-  }
-
-  try {
-    const raw = localStorage.getItem(PLAN_LIBRARY_KEY)
-    const parsed = raw ? JSON.parse(raw) : null
-    if (Array.isArray(parsed) && parsed.length) {
-      const normalized = parsed.map((record) => ({
-        ...record,
-        data: normalizeData(record.data),
-      }))
-      const requested = localStorage.getItem(ACTIVE_PLAN_KEY)
-      const active = normalized.find((record) => record.id === requested) || normalized[0]
-      return { plans: normalized, activePlanId: active.id, data: clone(active.data) }
-    }
-  } catch {
-    // migrate the old single-trip storage below
-  }
-
-  const first = planRecord(current)
-  return { plans: [first], activePlanId: first.id, data: clone(first.data) }
-}
-
-function formatMoney(value, currency) {
-  return `${currency}${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-}
-
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-function reportRows(data) {
-  const trip = data?.trip || {}
-  const arrival = trip.arrival || {}
-  const departure = trip.departure || {}
-  const discounts = Array.isArray(data?.budget?.discounts) ? data.budget.discounts : []
-  const rows = [
-    ['DIY Travel report'],
-    ['Trip', trip.name || 'Untitled Trip'],
-    ['Destination', trip.city || ''],
-    ['Travel dates', `${formatDate(trip.startDate)} — ${formatDate(trip.endDate)}`],
-    ['Currency', trip.currency || ''],
-    [],
-    ['FLIGHTS'],
-    ['Type', 'Flight no.', 'Airline', 'From / To', 'Airport', 'Time', 'Terminal', 'Gate'],
-    ['Arrival', arrival.flightNumber || '', arrival.airline || '', arrival.from || '', arrival.location || '', arrival.time || '', arrival.terminal || '', arrival.gate || ''],
-    ['Departure', departure.flightNumber || '', departure.airline || '', departure.to || '', departure.location || '', departure.time || '', departure.terminal || '', departure.gate || ''],
-    [],
-    ['STAYS / BASES'],
-    ['Name', 'Address', 'Check-in', 'Check-out'],
-    ...(trip.hotels || []).map((hotel) => [hotel.name || '', hotel.address || '', `${formatDate(hotel.checkInDate)} ${hotel.checkIn || ''}`.trim(), `${formatDate(hotel.checkOutDate)} ${hotel.checkOut || ''}`.trim()]),
-    [],
-    ['PLACES'],
-    ['Date', 'Time', 'Place', 'Category', 'Duration', 'Hours', 'Address', 'Priority'],
-    ...[...(data?.places || [])]
-      .sort((a, b) => `${a.visitDate || ''}-${a.plannedStart || a.suggestedStart || ''}`.localeCompare(`${b.visitDate || ''}-${b.plannedStart || b.suggestedStart || ''}`))
-      .map((place) => [formatDate(place.visitDate), place.plannedStart || place.suggestedStart || '', place.name || '', place.category || '', `${place.duration || 0} min`, place.hoursSummary || [place.open, place.close].filter(Boolean).join(' — '), place.address || '', place.priority || '']),
-    [],
-    ['EXPENSES'],
-    ['Date', 'Category', 'Description', 'Amount'],
-    ...(data?.expenses || []).map((item) => [formatDate(item.date), item.category || '', item.note || '', formatMoney(item.amount, trip.currency || '')]),
-    [],
-    ['DISCOUNTS / SAVINGS'],
-    ['Date', 'Discount', 'Code', 'Savings'],
-    ...discounts.map((item) => [formatDate(item.date), item.label || '', item.code || '', formatMoney(item.amount, trip.currency || '')]),
-    [],
-    ['THINGS TO BUY'],
-    ['Item', 'Location', 'Planned', 'Actual', 'Status'],
-    ...(data?.shopping || []).map((item) => [item.name || '', item.location || '', formatMoney(Number(item.planned || 0) * Number(item.quantity || 1), trip.currency || ''), formatMoney(item.actual || 0, trip.currency || ''), item.bought ? 'Bought' : 'Planned']),
-    [],
-    ['PACKING'],
-    ['Bag', 'Item', 'Packed'],
-    ...(data?.packing || []).map((item) => {
-      const bag = (data?.packingBags || []).find((candidate) => candidate.id === item.bagId)
-      return [bag?.name || 'Bag', item.name || '', item.checked ? 'Yes' : 'No']
-    }),
-  ]
-  return rows
-}
-
-function downloadTextFile(filename, contents, mimeType) {
-  const blob = new Blob([contents], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 500)
-}
-
-function safeReportFilename(name, extension) {
-  const safe = String(name || 'DIY-Travel')
-    .trim()
-    .replace(/[^a-z0-9-_]+/gi, '-')
-    .replace(/^-+|-+$/g, '') || 'DIY-Travel'
-  return `${safe}.${extension}`
-}
-
-function exportTripCsv(data) {
-  const csv = reportRows(data)
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(','))
-    .join('\r\n')
-  downloadTextFile(safeReportFilename(data?.trip?.name, 'csv'), `\ufeff${csv}`, 'text/csv;charset=utf-8')
-}
-
-function exportTripExcel(data) {
-  const rows = reportRows(data)
-  const table = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')
-  const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse}td{border:1px solid #ddd;padding:7px;vertical-align:top}</style></head><body><table>${table}</table></body></html>`
-  downloadTextFile(safeReportFilename(data?.trip?.name, 'xls'), `\ufeff${html}`, 'application/vnd.ms-excel;charset=utf-8')
-}
-
-function exportTripPdf(data, onError = () => {}) {
-  const rows = reportRows(data)
-  const table = rows.map((row) => {
-    if (!row.length) return '<tr class="spacer"><td>&nbsp;</td></tr>'
-    if (row.length === 1) return `<tr class="section"><th colspan="8">${escapeHtml(row[0])}</th></tr>`
-    return `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`
-  }).join('')
-
-  const printableHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(data?.trip?.name || 'DIY Travel')} report</title><style>
-    @page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;color:#182128;margin:0;font-size:10pt}h1{font-size:22pt;margin:0 0 4px}.meta{color:#66726f;margin:0 0 18px}.brand{color:#166a58;font-weight:800;font-size:9pt;letter-spacing:.08em;text-transform:uppercase}table{width:100%;border-collapse:collapse;table-layout:auto}td,th{border:1px solid #dfe5e2;padding:6px 7px;text-align:left;vertical-align:top;overflow-wrap:anywhere}.section th{background:#eef7f4;color:#0f4f42;font-size:11pt;padding:9px}.spacer td{border:0;height:9px}.note{margin-top:14px;color:#6b7773;font-size:8.5pt}@media print{.note{display:none}}</style></head><body><div class="brand">DIY Travel</div><h1>${escapeHtml(data?.trip?.name || 'Trip report')}</h1><p class="meta">${escapeHtml(data?.trip?.city || '')} · ${escapeHtml(formatDate(data?.trip?.startDate))} — ${escapeHtml(formatDate(data?.trip?.endDate))}</p><table>${table}</table><p class="note">Choose “Save as PDF” in the print dialog.</p></body></html>`
-
-  // Print from a temporary hidden frame so mobile/desktop browsers do not need to allow pop-ups.
-  const frame = document.createElement('iframe')
-  frame.setAttribute('title', 'DIY Travel PDF report')
-  frame.setAttribute('aria-hidden', 'true')
-  Object.assign(frame.style, {
-    position: 'fixed',
-    right: '0',
-    bottom: '0',
-    width: '1px',
-    height: '1px',
-    border: '0',
-    opacity: '0',
-    pointerEvents: 'none',
-  })
-  document.body.appendChild(frame)
-
-  const frameWindow = frame.contentWindow
-  const frameDocument = frame.contentDocument || frameWindow?.document
-  if (!frameWindow || !frameDocument) {
-    frame.remove()
-    onError('The PDF report could not be prepared in this browser. Try CSV or Excel instead.')
-    return
-  }
-
-  let cleanedUp = false
-  const cleanup = () => {
-    if (cleanedUp) return
-    cleanedUp = true
-    frame.remove()
-  }
-
-  const printReport = () => {
-    try {
-      frameWindow.focus()
-      frameWindow.print()
-      frameWindow.addEventListener?.('afterprint', cleanup, { once: true })
-      setTimeout(cleanup, 30000)
-    } catch (error) {
-      console.error('PDF print failed:', error)
-      cleanup()
-      onError('The print dialog could not open. Try CSV or Excel instead.')
-    }
-  }
-
-  frameDocument.open()
-  frameDocument.write(printableHtml)
-  frameDocument.close()
-  setTimeout(printReport, 180)
-}
-
-function formatDate(date) {
-  if (!date) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
-}
-
-function formatShortDate(date) {
-  if (!date) return '—'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(`${date}T00:00:00`))
-}
-
-function formatDayName(date) {
-  if (!date) return ''
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(new Date(`${date}T12:00:00`))
-}
-
-function enumerateDates(startDate, endDate) {
-  if (!startDate || !endDate) return []
-  const start = new Date(`${startDate}T12:00:00`)
-  const end = new Date(`${endDate}T12:00:00`)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return []
-  const dates = []
-  const cursor = new Date(start)
-  while (cursor <= end && dates.length < 60) {
-    dates.push(cursor.toISOString().slice(0, 10))
-    cursor.setDate(cursor.getDate() + 1)
-  }
-  return dates
-}
-
-function addMinutes(time, minutes) {
-  if (!time || !/^\d{2}:\d{2}$/.test(time)) return ''
-  const [hour, minute] = time.split(':').map(Number)
-  const total = (hour * 60 + minute + Number(minutes || 0)) % (24 * 60)
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-}
-
-function serializeOpeningHours(hours) {
-  if (!hours) return null
-  return {
-    weekdayDescriptions: Array.isArray(hours.weekdayDescriptions) ? [...hours.weekdayDescriptions] : [],
-    periods: Array.isArray(hours.periods)
-      ? hours.periods.map((period) => ({
-          open: period.open ? { day: period.open.day, hour: period.open.hour, minute: period.open.minute } : null,
-          close: period.close ? { day: period.close.day, hour: period.close.hour, minute: period.close.minute } : null,
-        }))
-      : [],
-  }
-}
-
-function timePartsToInput(parts) {
-  if (!parts || typeof parts.hour !== 'number') return ''
-  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute ?? 0).padStart(2, '0')}`
-}
-
-function hoursForDate(openingHours, date) {
-  if (!openingHours || !date) return { open: '', close: '', summary: 'Hours unavailable', status: 'unavailable' }
-  const targetDate = new Date(`${date}T12:00:00`)
-  const dayNumber = targetDate.getDay()
-  const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(targetDate)
-  const descriptions = openingHours.weekdayDescriptions || []
-  const description = descriptions.find((item) => item.toLowerCase().startsWith(dayName.toLowerCase())) || ''
-  const explicitlyClosed = /closed/i.test(description)
-  const periods = (openingHours.periods || []).filter((period) => period.open && period.open.day === dayNumber)
-  if (!periods.length) {
-    if (explicitlyClosed) return { open: '', close: '', summary: description || `${dayName}: Closed`, status: 'closed' }
-    return { open: '', close: '', summary: description || `${dayName}: Hours unavailable`, status: 'unavailable' }
-  }
-  const first = periods[0]
-  const last = periods[periods.length - 1]
-  const open = timePartsToInput(first.open)
-  const close = timePartsToInput(last.close)
-  return { open, close, summary: description || (close ? `${open} — ${close}` : 'Open 24 hours'), status: 'open' }
-}
-
-function placeWithDateHours(place, date) {
-  const next = { ...place, visitDate: date }
-  if (place?.source === 'google' && place?.regularOpeningHours) {
-    const hours = hoursForDate(place.regularOpeningHours, date)
-    return {
-      ...next,
-      open: hours.status === 'open' ? hours.open : (hours.status === 'unavailable' ? place.open || '' : ''),
-      close: hours.status === 'open' ? hours.close : (hours.status === 'unavailable' ? place.close || '' : ''),
-      hoursSummary: hours.summary,
-      hoursStatus: hours.status,
-    }
-  }
-  return next
-}
-
-function inferPlaceCategory(primaryType, types = []) {
-  const allTypes = [primaryType, ...types].filter(Boolean)
-  if (allTypes.some((type) => ['shopping_mall', 'store', 'department_store', 'market'].includes(type))) return 'Shopping'
-  if (allTypes.some((type) => ['restaurant', 'cafe', 'bakery', 'bar', 'food'].includes(type))) return 'Food'
-  if (allTypes.some((type) => ['park', 'national_park', 'natural_feature', 'beach'].includes(type))) return 'Nature'
-  if (allTypes.some((type) => ['lodging', 'hotel'].includes(type))) return 'Hotel'
-  if (allTypes.some((type) => ['transit_station', 'train_station', 'subway_station', 'bus_station', 'airport'].includes(type))) return 'Transport'
-  return 'Attraction'
-}
-
-function createBlankPlaceForm(defaultDate = '') {
-  return {
-    name: '', category: 'Attraction', open: '', close: '', duration: 60,
-    priority: 'High', visitDate: defaultDate, plannedStart: '', suggestedStart: '', timeSource: 'suggested',
-    address: '', googlePlaceId: '', latitude: null, longitude: null, googleMapsURI: '', websiteURI: '',
-    primaryType: '', primaryTypeDisplayName: '', regularOpeningHours: null, currentOpeningHours: null,
-    hoursSummary: '', hoursStatus: 'unavailable', source: 'manual', notes: '',
-  }
-}
-
-function createBlankHotel(startDate, endDate) {
-  return {
-    id: Date.now(), name: '', checkInDate: startDate || '', checkIn: '15:00',
-    checkOutDate: endDate || '', checkOut: '11:00', ...emptyMapFields,
-  }
-}
-
-function isMapped(place) {
-  return Boolean(place && (place.googlePlaceId || (place.latitude != null && place.longitude != null)))
-}
-
-function firstHotelForArrival(hotels = []) {
-  if (!hotels.length) return null
-  return [...hotels].sort((a, b) => `${a.checkInDate || ''} ${a.checkIn || ''}`.localeCompare(`${b.checkInDate || ''} ${b.checkIn || ''}`))[0]
-}
-
-function transportDescriptor(endpoint) {
-  const detail = [endpoint.airline, endpoint.flightNumber].filter(Boolean).join(' ')
-  return detail || endpoint.type || 'Travel'
-}
-
-function clockToMinutes(value, fallback = null) {
-  if (!value || !/^\d{2}:\d{2}$/.test(String(value))) return fallback
-  const [hour, minute] = String(value).split(':').map(Number)
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback
-  return hour * 60 + minute
-}
-
-function minutesToClock(value) {
-  if (!Number.isFinite(Number(value))) return ''
-  const normalized = ((Math.round(Number(value)) % 1440) + 1440) % 1440
-  const hour = Math.floor(normalized / 60)
-  const minute = normalized % 60
-  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-}
-
-function formatTravelMinutes(minutes) {
-  const value = Math.max(0, Math.round(Number(minutes) || 0))
-  if (value < 60) return `${value} min`
-  const hours = Math.floor(value / 60)
-  const rest = value % 60
-  return rest ? `${hours} hr ${rest} min` : `${hours} hr`
-}
-
-function formatNearbyDistance(meters) {
-  const value = Number(meters)
-  if (!Number.isFinite(value) || value < 0) return 'Nearby'
-  if (value < 1000) return `${Math.round(value)} m`
-  const km = value / 1000
-  return `${km.toFixed(km >= 10 ? 0 : 1)} km`
-}
-
-function normalizedPlaceText(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function placeIdentityKeys(place) {
-  if (!place) return []
-  const keys = []
-  if (place.googlePlaceId) keys.push(`id:${place.googlePlaceId}`)
-  const name = normalizedPlaceText(place.name || place.location)
-  const address = normalizedPlaceText(place.address)
-  if (name && address) keys.push(`name-address:${name}|${address}`)
-  const lat = Number(place.latitude)
-  const lng = Number(place.longitude)
-  if (Number.isFinite(lat) && Number.isFinite(lng)) keys.push(`coord:${lat.toFixed(5)},${lng.toFixed(5)}`)
-  return keys
-}
-
-function isPlaceAlreadySaved(candidate, savedPlaces = []) {
-  const candidateKeys = new Set(placeIdentityKeys(candidate))
-  if (!candidateKeys.size) return false
-  return savedPlaces.some((saved) => placeIdentityKeys(saved).some((key) => candidateKeys.has(key)))
-}
-
-function haversineKm(a, b) {
-  const lat1 = Number(a?.latitude)
-  const lng1 = Number(a?.longitude)
-  const lat2 = Number(b?.latitude)
-  const lng2 = Number(b?.longitude)
-  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return null
-  const toRad = (value) => value * Math.PI / 180
-  const dLat = toRad(lat2 - lat1)
-  const dLng = toRad(lng2 - lng1)
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-  return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
-}
-
-function estimateTransferMinutes(from, to) {
-  const distanceKm = haversineKm(from, to)
-  if (distanceKm == null) return { distanceKm: null, minutes: 15 }
-  if (distanceKm <= 1) return { distanceKm, minutes: Math.max(5, Math.round(distanceKm * 14)) }
-  if (distanceKm <= 5) return { distanceKm, minutes: Math.round(10 + distanceKm * 5) }
-  return { distanceKm, minutes: Math.round(18 + distanceKm * 3.5) }
-}
-
-function placeHoursMinutes(place) {
-  if (place?.hoursStatus === 'closed') return { open: 0, close: 0, closed: true }
-  const open = clockToMinutes(place.open, 8 * 60)
-  let close = clockToMinutes(place.close, 23 * 60)
-  if (close === 0 && open > 0) close = 24 * 60
-  if (close <= open) close += 24 * 60
-  return { open, close, closed: false }
-}
-
-function priorityBonus(priority) {
-  if (priority === 'Must Visit') return 120
-  if (priority === 'High') return 60
-  return 0
-}
-
-function hotelForDate(hotels = [], date = '') {
-  return hotels.find((hotel) => hotel.checkInDate <= date && hotel.checkOutDate >= date) || null
-}
-
-function dayStartPreference(data, date) {
-  const trip = data?.trip || {}
-  const arrival = trip.arrival || {}
-  const hotels = Array.isArray(trip.hotels) ? trip.hotels : []
-  const stay = hotelForDate(hotels, date) || firstHotelForArrival(hotels)
-  const saved = trip.dayStartPreferences?.[date]
-  if (saved) return saved
-  if (arrival?.date === date && arrival?.time) return isMapped(stay) ? 'arrival_stay' : 'arrival_places'
-  return isMapped(stay) ? 'stay' : 'first_place'
-}
-
-function dayStartPreferenceLabel(mode) {
-  if (mode === 'arrival_stay') return 'Airport → stay/base → places'
-  if (mode === 'arrival_places') return 'Airport → first destination'
-  if (mode === 'stay') return 'Stay/base → places'
-  return 'Start at first destination'
-}
-
-function dayArrangementPreference(data, date) {
-  const raw = data?.trip?.dayArrangementPreferences?.[date] || {}
-  return {
-    strategy: raw.strategy || 'balanced',
-    endMode: raw.endMode || 'none',
-    endPlaceId: raw.endPlaceId || '',
-  }
-}
-
-function arrangementLabel(pref) {
-  const strategy = pref?.strategy === 'nearest' ? 'Nearest first' : pref?.strategy === 'closing' ? 'Earlier closing first' : 'Balanced'
-  if (pref?.endMode === 'stay') return `${strategy} · return to stay/base`
-  if (pref?.endMode === 'shopping') return `${strategy} · shopping last`
-  if (pref?.endMode === 'place') return `${strategy} · chosen final place`
-  return `${strategy} · end at final destination`
-}
-
-function applySmartSuggestionsForDate(data, date) {
-  if (!date) return data
-  let schedule
-  try {
-    schedule = smartPlaceSchedule(data, date)
-  } catch (error) {
-    console.warn('Smart suggestion refresh skipped:', error)
-    return data
-  }
-  return {
-    ...data,
-    places: (data.places || []).map((place) => {
-      if (place.visitDate !== date || place.timeSource === 'manual') return place
-      const suggestion = schedule.get(place.id)
-      return { ...place, suggestedStart: suggestion?.start || '' }
-    }),
-  }
-}
-
-function applyAllSmartSuggestions(data) {
-  let next = data
-  enumerateDates(data?.trip?.startDate, data?.trip?.endDate).forEach((date) => {
-    next = applySmartSuggestionsForDate(next, date)
-  })
-  return next
-}
-
-function findNextAvailableDay(data, placeId, fromDate) {
-  const dates = enumerateDates(data?.trip?.startDate, data?.trip?.endDate)
-  const startIndex = dates.indexOf(fromDate)
-  const target = (data?.places || []).find((place) => String(place.id) === String(placeId))
-  if (!target) return null
-  for (const date of dates.slice(Math.max(0, startIndex + 1))) {
-    const candidateData = {
-      ...data,
-      places: (data.places || []).map((place) => String(place.id) === String(placeId)
-        ? { ...placeWithDateHours(place, date), plannedStart: '', suggestedStart: '', timeSource: 'suggested' }
-        : place),
-    }
-    try {
-      const suggestion = smartPlaceSchedule(candidateData, date).get(target.id)
-      if (suggestion?.start && !suggestion.scheduleWarning) return { date, start: suggestion.start, end: suggestion.end || '' }
-    } catch {
-      // Keep looking at later days.
-    }
-  }
-  return null
-}
-
-function smartPlaceSchedule(data, date) {
-  const places = (Array.isArray(data?.places) ? data.places : [])
-    .filter((place) => place && place.visitDate === date && place.hoursStatus !== 'closed')
-  if (!places.length) return new Map()
-
-  const trip = data?.trip || {}
-  const arrival = trip.arrival || {}
-  const departure = trip.departure || {}
-  const hotels = Array.isArray(trip.hotels) ? trip.hotels : []
-  const stay = hotelForDate(hotels, date) || firstHotelForArrival(hotels)
-  const hasArrivalThisDay = arrival?.date === date && Boolean(arrival.time)
-  const startPreference = dayStartPreference(data, date)
-  const arrangement = dayArrangementPreference(data, date)
-  const endTarget = arrangement.endMode === 'stay' && isMapped(stay) ? stay : null
-  let currentMinute = 9 * 60
-  let currentLocation = null
-
-  if (hasArrivalThisDay && (startPreference === 'arrival_stay' || startPreference === 'arrival_places')) {
-    currentMinute = clockToMinutes(arrival.time, currentMinute) + Number(arrival.transferBufferMinutes || 0)
-    currentLocation = isMapped(arrival) ? arrival : null
-
-    if (startPreference === 'arrival_stay' && isMapped(stay)) {
-      if (isMapped(arrival)) {
-        const transfer = estimateTransferMinutes(arrival, stay)
-        currentMinute += transfer.minutes
-      }
-      currentLocation = stay
-    }
-  } else if (startPreference === 'stay' && isMapped(stay)) {
-    currentLocation = stay
-  }
-
-  let dayEnd = 23 * 60 + 30
-  if (departure?.date === date && departure.time) {
-    dayEnd = Math.max(currentMinute, clockToMinutes(departure.time, dayEnd) - 120)
-  }
-
-  const manual = places
-    .filter((place) => place.timeSource === 'manual' && /^\d{2}:\d{2}$/.test(String(place.plannedStart || '')))
-    .sort((a, b) => String(a.plannedStart || '').localeCompare(String(b.plannedStart || '')))
-  const remaining = places.filter((place) => !manual.some((manualPlace) => manualPlace.id === place.id))
-  const result = new Map()
-
-  function chooseAndSchedule(windowEnd) {
-    let scheduledSomething = true
-    while (remaining.length && scheduledSomething) {
-      scheduledSomething = false
-      const candidates = remaining.map((place, index) => {
-        const { open, close, closed } = placeHoursMinutes(place)
-        const transfer = currentLocation && isMapped(place) ? estimateTransferMinutes(currentLocation, place) : { distanceKm: null, minutes: currentLocation ? 15 : 0 }
-        const start = Math.max(currentMinute + transfer.minutes, open)
-        const end = start + Number(place.duration || 60)
-        const feasible = !closed && end <= Math.min(close, windowEnd)
-        const distancePenalty = transfer.distanceKm == null ? 18 : transfer.distanceKm * 12
-        const closeUrgency = close
-        let score
-        if (arrangement.strategy === 'nearest') score = distancePenalty * 8 + closeUrgency * 0.15 - priorityBonus(place.priority)
-        else if (arrangement.strategy === 'closing') score = closeUrgency * 1.5 + distancePenalty - priorityBonus(place.priority)
-        else score = closeUrgency + distancePenalty - priorityBonus(place.priority)
-
-        const remainingCount = remaining.length
-        if (arrangement.endMode === 'shopping' && String(place.category || '').toLowerCase() === 'shopping' && remainingCount > 1) score += 5000
-        if (arrangement.endMode === 'place' && String(place.id) === String(arrangement.endPlaceId) && remainingCount > 1) score += 5000
-        if (endTarget && isMapped(place)) {
-          const endDistance = haversineKm(place, endTarget)
-          if (endDistance != null) score += endDistance * (remainingCount <= 2 ? 40 : 3)
-        }
-        return { place, index, open, close, transfer, start, end, feasible, score }
-      }).filter((item) => item.feasible).sort((a, b) => a.score - b.score || a.start - b.start)
-
-      const chosen = candidates[0]
-      if (!chosen) return
-      remaining.splice(chosen.index, 1)
-      result.set(chosen.place.id, {
-        start: minutesToClock(chosen.start),
-        end: minutesToClock(chosen.end),
-        suggested: true,
-        distanceKm: chosen.transfer.distanceKm,
-        transferMinutes: chosen.transfer.minutes,
-        scheduleNote: chosen.transfer.distanceKm != null
-          ? `Suggested by closing time + ${chosen.transfer.distanceKm.toFixed(1)} km from the previous stop`
-          : 'Suggested by opening/closing hours and your day window',
-      })
-      currentMinute = chosen.end
-      if (isMapped(chosen.place)) currentLocation = chosen.place
-      scheduledSomething = true
-    }
-  }
-
-  manual.forEach((place) => {
-    const fixedStart = clockToMinutes(place.plannedStart, currentMinute)
-    chooseAndSchedule(Math.max(currentMinute, fixedStart))
-    const { open, close, closed } = placeHoursMinutes(place)
-    const duration = Number(place.duration || 60)
-    const fixedEnd = fixedStart + duration
-    const conflict = closed || fixedStart < currentMinute || fixedStart < open || fixedEnd > close || fixedEnd > dayEnd
-    result.set(place.id, {
-      start: place.plannedStart,
-      end: minutesToClock(fixedEnd),
-      suggested: false,
-      scheduleWarning: conflict ? 'Your fixed time may conflict with travel time, opening hours, or another stop.' : '',
-    })
-    currentMinute = Math.max(currentMinute, fixedEnd)
-    if (isMapped(place)) currentLocation = place
-  })
-
-  chooseAndSchedule(dayEnd)
-
-  remaining.forEach((place) => {
-    const { open, close, closed } = placeHoursMinutes(place)
-    const transfer = currentLocation && isMapped(place) ? estimateTransferMinutes(currentLocation, place) : { distanceKm: null, minutes: 15 }
-    const earliestStart = Math.max(currentMinute + transfer.minutes, open)
-    const reason = closed
-      ? `Closed on ${formatDate(date)} — move this stop to another day.`
-      : earliestStart + Number(place.duration || 60) > close
-        ? `Doesn't fit before ${place.close || 'closing time'} — consider moving it to another day.`
-        : `Doesn't fit in today's available time window — consider moving it to another day.`
-    result.set(place.id, { start: '', end: '', suggested: true, distanceKm: transfer.distanceKm, transferMinutes: transfer.minutes, scheduleWarning: reason })
-  })
-
-  return result
-}
-
-function buildDayItems(data, date) {
-  const items = []
-  const trip = data?.trip || {}
-  const arrival = trip.arrival || {}
-  const departure = trip.departure || {}
-  const smartSchedule = smartPlaceSchedule(data || {}, date)
-  const startPreference = dayStartPreference(data, date)
-  const arrangement = dayArrangementPreference(data, date)
-  const hotels = Array.isArray(trip.hotels) ? trip.hotels : []
-  const stay = hotelForDate(hotels, date) || firstHotelForArrival(hotels)
-
-  if (arrival?.date === date && (startPreference === 'arrival_stay' || startPreference === 'arrival_places')) {
-    items.push({
-      key: 'arrival', kind: 'arrival', start: arrival.time || '', end: '',
-      title: `Arrive · ${arrival.location || 'Arrival point'}`,
-      subtitle: `${transportDescriptor(arrival)}${arrival.from ? ` · from ${arrival.from}` : ''}`,
-      detail: arrival.address || 'Arrival location', mapUri: arrival.googleMapsURI || '', locationData: arrival, sort: arrival.time || '00:00',
-    })
-  }
-
-  if (arrival?.date === date && startPreference === 'arrival_stay' && isMapped(stay)) {
-    const airportReady = addMinutes(arrival.time || '09:00', Number(arrival.transferBufferMinutes || 0))
-    const transferToStay = isMapped(arrival) ? estimateTransferMinutes(arrival, stay) : { minutes: 15 }
-    const stayArrivalTime = addMinutes(airportReady, transferToStay.minutes)
-    items.push({
-      key: `arrival-stay-${stay.id || date}`, kind: 'stay', start: stayArrivalTime, end: '',
-      title: `Stay/base · ${stay.name || 'Accommodation'}`,
-      subtitle: stay.address || 'Stay/base',
-      detail: `First stop after the airport${stay.checkIn ? ` · check-in from ${stay.checkIn}` : ''}`,
-      mapUri: stay.googleMapsURI || '', locationData: stay, sort: stayArrivalTime || '00:01',
-    })
-  }
-
-  if (startPreference === 'stay' && isMapped(stay)) {
-    items.push({
-      key: `day-start-stay-${date}`, kind: 'start', start: '09:00', end: '',
-      title: `Start · ${stay.name || 'Stay/base'}`,
-      subtitle: stay.address || 'Stay/base', detail: 'Your day starts here',
-      mapUri: stay.googleMapsURI || '', locationData: stay, sort: '00:01',
-    })
-  }
-
-  ;(trip.hotels || []).forEach((hotel) => {
-    if (hotel.checkInDate === date && startPreference !== 'stay' && !(startPreference === 'arrival_stay' && String(stay?.id) === String(hotel.id))) {
-      const arrivesThisDay = arrival?.date === date && arrival.time
-      const checkInAvailable = hotel.checkIn || '15:00'
-      const arrivalReady = arrivesThisDay ? addMinutes(arrival.time, Number(arrival.transferBufferMinutes || 0)) : ''
-      const arrivesAfterCheckInOpens = arrivalReady && arrivalReady >= checkInAvailable
-      const placesBeforeStay = arrivesThisDay && startPreference === 'arrival_places'
-      const displayStart = placesBeforeStay ? 'Later' : (arrivesAfterCheckInOpens ? 'After arrival' : checkInAvailable)
-      const sort = placesBeforeStay ? '97:30' : (arrivesAfterCheckInOpens ? addMinutes(arrivalReady, 1) : checkInAvailable)
-      items.push({
-        key: `hotel-checkin-${hotel.id}`, kind: 'hotel', start: displayStart, end: '',
-        title: `Stay check-in · ${hotel.name || 'Accommodation'}`,
-        subtitle: hotel.address || 'Accommodation',
-        detail: `Check-in available from ${checkInAvailable}`,
-        mapUri: hotel.googleMapsURI || '', locationData: hotel, sort,
-      })
-    }
-    if (hotel.checkOutDate === date) {
-      items.push({
-        key: `hotel-checkout-${hotel.id}`, kind: 'hotel', start: hotel.checkOut || '', end: '',
-        title: `Stay check-out · ${hotel.name || 'Accommodation'}`,
-        subtitle: hotel.address || 'Accommodation', detail: 'Check-out', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkOut || '11:00',
-      })
-    }
-  })
-
-  ;(Array.isArray(data?.places) ? data.places : []).filter((place) => place && place.visitDate === date && place.hoursStatus !== 'closed').forEach((place) => {
-    const schedule = smartSchedule.get(place.id) || {}
-    const effectiveStart = schedule.start || (place.timeSource === 'manual' ? place.plannedStart : (place.suggestedStart || place.plannedStart)) || ''
-    const effectiveEnd = schedule.end || (effectiveStart ? addMinutes(effectiveStart, place.duration) : '')
-    const scheduleCopy = schedule.scheduleWarning
-      ? schedule.scheduleWarning
-      : schedule.suggested
-        ? schedule.scheduleNote
-        : ''
-    const hoursCopy = place.hoursSummary || (place.open || place.close ? `Open ${place.open || '?'} — ${place.close || '?'}` : 'Hours unavailable')
-    items.push({
-      key: `place-${place.id}`, kind: 'place', start: effectiveStart, end: effectiveEnd,
-      title: place.name,
-      subtitle: `${place.category} · ${place.duration} min${place.priority ? ` · ${place.priority}` : ''}`,
-      detail: [hoursCopy, scheduleCopy].filter(Boolean).join(' · '),
-      notes: place.notes || '',
-      mapUri: place.googleMapsURI || '', locationData: place,
-      sort: effectiveStart || '98:59', suggestedTime: Boolean(schedule.suggested), scheduleWarning: schedule.scheduleWarning || '',
-    })
-  })
-
-  if (arrangement.endMode === 'stay' && isMapped(stay) && (data?.places || []).some((place) => place.visitDate === date && place.hoursStatus !== 'closed')) {
-    items.push({
-      key: `return-stay-${date}`, kind: 'return', start: '', end: '',
-      title: `Return · ${stay.name || 'Stay/base'}`,
-      subtitle: stay.address || 'Stay/base', detail: 'Preferred end point for this day',
-      mapUri: stay.googleMapsURI || '', locationData: stay, sort: '98:58',
-    })
-  }
-
-  if (departure?.date === date) {
-    items.push({
-      key: 'departure', kind: 'departure', start: departure.time || '', end: '',
-      title: `Depart · ${departure.location || 'Departure point'}`,
-      subtitle: `${transportDescriptor(departure)}${departure.to ? ` · to ${departure.to}` : ''}`,
-      detail: departure.address || 'Departure location', mapUri: departure.googleMapsURI || '', locationData: departure, sort: departure.time || '99:00',
-    })
-  }
-
-  return items.sort((a, b) => String(a.sort || '').localeCompare(String(b.sort || '')))
-}
-
-function GooglePlacePicker({ onSelect, placeholder = 'Search place or address…', compact = false, includedType = '' }) {
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [status, setStatus] = useState('idle')
-  const [error, setError] = useState('')
-
-  async function runSearch(event) {
-    event?.preventDefault()
-    const value = query.trim()
-    if (value.length < 2) {
-      setError('Type at least 2 characters.')
-      return
-    }
-    setStatus('searching')
-    setError('')
-    try {
-      const places = await searchGooglePlaces(value, { includedType, maxResults: 6 })
-      setResults(places)
-      setStatus('ready')
-      if (!places.length) setError('No matches found. Try a more specific name or address.')
-    } catch (searchError) {
-      console.error('Google Places Text Search failed:', searchError)
-      setResults([])
-      setStatus('error')
-      setError('Search is unavailable right now. You can still enter the details manually.')
-    }
-  }
-
-  async function choosePlace(place) {
-    setStatus('fetching')
-    setError('')
-    let selected = place
-    try {
-      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : null
-      if (detailed) selected = detailed
-    } catch (detailsError) {
-      // The text-search result already contains the name, address and coordinates we need.
-      // Do not block the user when the optional GetPlace/details quota is unavailable.
-      console.warn('Google Place Details unavailable; using search result data instead:', detailsError)
-    }
-    setQuery(selected.name || query)
-    setResults([])
-    onSelect?.(selected)
-    setStatus('ready')
-  }
-
-  return (
-    <div className={`google-picker text-search-picker simplified-search ${compact ? 'compact' : ''}`}>
-      <div className="custom-autocomplete-wrap">
-        <Search className="custom-search-icon" size={18} />
-        <input
-          className="custom-google-input"
-          value={query}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          autoComplete="off"
-          onChange={(event) => { setQuery(event.target.value); setResults([]); setError('') }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              event.stopPropagation()
-              runSearch()
-            }
-          }}
-        />
-        {(status === 'searching' || status === 'fetching') && <LoaderCircle className="google-search-spinner" size={17} />}
-      </div>
-      {results.length > 0 && (
-        <div className="google-text-results" role="listbox">
-          {results.map((place, index) => (
-            <button
-              key={`${place.googlePlaceId || place.name}-${index}`}
-              type="button"
-              className="google-text-result"
-              onClick={() => choosePlace(place)}
-            >
-              <MapPin size={16} />
-              <span><strong>{place.name || 'Place result'}</strong><small>{place.address || 'Address unavailable'}</small></span>
-            </button>
-          ))}
-          <div className="google-suggestions-footer maps-attribution" aria-label="Google Maps attribution">Google Maps</div>
-        </div>
-      )}
-      {error && <div className="google-picker-error">{error}</div>}
-    </div>
-  )
-}
-
-function TimelineLegSummary({ origin, destination, date, time, utcOffsetMinutes }) {
-  const [status, setStatus] = useState('idle')
-  const [transitOptions, setTransitOptions] = useState([])
-  const distanceKm = haversineKm(origin, destination)
-  if (distanceKm == null) return null
-
-  const walkMinutes = Math.max(2, Math.round((distanceKm / 4.7) * 60))
-  const driveMinutes = Math.max(3, Math.round((distanceKm / 28) * 60 + 2))
-
-  async function loadTransit() {
-    if (status === 'loading') return
-    setStatus('loading')
-    try {
-      const departureTime = localDateTimeToUtc(date, time, utcOffsetMinutes, 0)
-      const result = await getRouteComparison({ origin, destination, departureTime })
-      setTransitOptions(result.filter((option) => ['BUS', 'RAIL', 'FERRY'].includes(option.mode) && option.route))
-      setStatus('ready')
-    } catch (error) {
-      console.warn('Inline transit comparison unavailable:', error)
-      setTransitOptions([])
-      setStatus('unavailable')
-    }
-  }
-
-  return (
-    <div className="timeline-leg-summary">
-      <div className="timeline-leg-destination"><Navigation size={13} /><span>Next stop · {distanceKm.toFixed(1)} km</span></div>
-
-      <div className="timeline-leg-options timeline-leg-options-desktop">
-        <span><Footprints size={13} /> Walk ≈ {formatTravelMinutes(walkMinutes)}</span>
-        <span><Car size={13} /> Drive ≈ {formatTravelMinutes(driveMinutes)}</span>
-        {status === 'idle' && <button type="button" onClick={loadTransit}><TrainFront size={13} /> Check transit</button>}
-        {status === 'loading' && <span><LoaderCircle className="spin" size={13} /> Checking transit…</span>}
-        {status === 'ready' && transitOptions.map((option) => <span key={option.mode}>{transportIcon(option.mode, 13)} {modeLabel(option.mode)} {option.minutes ? `≈ ${formatTravelMinutes(option.minutes)}` : ''}</span>)}
-        {status === 'ready' && !transitOptions.length && <span>Transit not available</span>}
-        {status === 'unavailable' && <button type="button" onClick={loadTransit}><TrainFront size={13} /> Retry transit</button>}
-      </div>
-
-      <details
-        className="timeline-leg-mobile-dropdown"
-        onToggle={(event) => {
-          if (event.currentTarget.open && status === 'idle') loadTransit()
-        }}
-      >
-        <summary>
-          <span><Navigation size={14} /> Travel options</span>
-          <ChevronDown size={15} />
-        </summary>
-        <div className="timeline-leg-mobile-menu">
-          <div className="timeline-leg-mobile-option"><span><Footprints size={15} /> Walk</span><strong>≈ {formatTravelMinutes(walkMinutes)}</strong></div>
-          <div className="timeline-leg-mobile-option"><span><Car size={15} /> Drive / taxi</span><strong>≈ {formatTravelMinutes(driveMinutes)}</strong></div>
-          {status === 'loading' && <div className="timeline-leg-mobile-option muted"><span><LoaderCircle className="spin" size={15} /> Public transit</span><strong>Checking…</strong></div>}
-          {status === 'ready' && transitOptions.map((option) => (
-            <div className="timeline-leg-mobile-option" key={`mobile-${option.mode}`}>
-              <span>{transportIcon(option.mode, 15)} {modeLabel(option.mode)}</span>
-              <strong>{option.minutes ? `≈ ${formatTravelMinutes(option.minutes)}` : 'Available'}</strong>
-            </div>
-          ))}
-          {status === 'ready' && !transitOptions.length && <div className="timeline-leg-mobile-option muted"><span><TrainFront size={15} /> Public transit</span><strong>Not available</strong></div>}
-          {status === 'unavailable' && <button type="button" className="timeline-leg-mobile-retry" onClick={loadTransit}><TrainFront size={15} /> Retry transit schedules</button>}
-        </div>
-      </details>
-    </div>
-  )
-}
-
-function AirportLocationField({ title, value, onChange, onPlaceSelect }) {
-  const [query, setQuery] = useState(value.location || '')
-  const [results, setResults] = useState([])
-  const [status, setStatus] = useState('idle')
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    setQuery(value.location || '')
-  }, [value.location])
-
-  async function runSearch() {
-    const searchValue = query.trim()
-    if (searchValue.length < 2) {
-      setError('Enter an airport name or IATA code.')
-      return
-    }
-    setStatus('searching')
-    setError('')
-    try {
-      const matches = await searchGooglePlaces(searchValue, { includedType: 'airport', maxResults: 5 })
-      setResults(matches)
-      setStatus('ready')
-      if (!matches.length) setError('No matching airport found. You can keep the airport name manually.')
-    } catch (searchError) {
-      console.error('Airport search failed:', searchError)
-      setResults([])
-      setStatus('error')
-      setError('Airport search is unavailable right now. You can keep the airport name manually.')
-    }
-  }
-
-  async function chooseAirport(place) {
-    setStatus('fetching')
-    setError('')
-    let selected = place
-    try {
-      const detailed = place.googlePlaceId ? await getGooglePlaceDetails(place.googlePlaceId) : null
-      if (detailed) selected = detailed
-    } catch (detailsError) {
-      // Airport search results already include enough map data to save the airport.
-      // Keep the selection usable even when GetPlace/details requests are quota-limited.
-      console.warn('Airport details unavailable; using search result data instead:', detailsError)
-    }
-    setQuery(selected.name || query)
-    setResults([])
-    onPlaceSelect?.(selected)
-    setStatus('ready')
-  }
-
-  function changeAirportName(nextValue) {
-    setQuery(nextValue)
-    setResults([])
-    setError('')
-    onChange({
-      location: nextValue,
-      address: '', googlePlaceId: '', latitude: null, longitude: null,
-      googleMapsURI: '', websiteURI: '', utcOffsetMinutes: null, source: 'manual',
-    })
-  }
-
-  return (
-    <div className="manual-flight-airport-field">
-      <label>
-        <span>{title} airport</span>
-        <div className={`airport-field-search simplified-airport-search ${isMapped(value) ? 'is-selected' : ''}`}>
-          <Search size={18} aria-label="Search airport" />
-          <input
-            value={query}
-            placeholder="Airport name or IATA code"
-            autoComplete="off"
-            onChange={(e) => changeAirportName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                runSearch()
-              }
-            }}
-          />
-          {(status === 'searching' || status === 'fetching') && <LoaderCircle className="airport-search-spinner" size={17} />}
-        </div>
-      </label>
-
-      {results.length > 0 && (
-        <div className="airport-search-results">
-          {results.map((place) => (
-            <button type="button" key={place.googlePlaceId || `${place.name}-${place.address}`} onClick={() => chooseAirport(place)}>
-              <MapPin size={15} />
-              <span><strong>{place.name}</strong><small>{place.address || 'Address unavailable'}</small></span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {error && <div className="airport-search-error">{error}</div>}
-
-      {(value.location || value.address) && (
-        <div className={`airport-field-details ${isMapped(value) ? 'mapped' : ''}`}>
-          <MapPin size={16} />
-          <div>
-            <strong>{value.location || 'Airport'}</strong>
-            <span>{value.address || 'Select a search result to save the address for routing.'}</span>
-          </div>
-          {value.googleMapsURI && <a href={value.googleMapsURI} target="_blank" rel="noreferrer" title="Open map"><ExternalLink size={15} /></a>}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function formatRouteFare(fare) {
-  if (!fare?.currencyCode) return ''
-  const units = Number(fare.units || 0)
-  const nanos = Number(fare.nanos || 0) / 1_000_000_000
-  const value = units + nanos
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: fare.currencyCode, maximumFractionDigits: 2 }).format(value)
-  } catch {
-    return `${fare.currencyCode} ${value.toFixed(2)}`
-  }
-}
-
-function localDateTimeToUtc(date, time, utcOffsetMinutes, addBuffer = 0) {
-  if (!date || !time || utcOffsetMinutes == null) return null
-  const [year, month, day] = date.split('-').map(Number)
-  const [hour, minute] = time.split(':').map(Number)
-  if (![year, month, day, hour, minute].every(Number.isFinite)) return null
-  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute + Number(addBuffer || 0))
-  return new Date(localAsUtc - Number(utcOffsetMinutes) * 60_000).toISOString()
-}
-
-function googleDirectionsUrl(origin, destination, travelMode = 'walking') {
-  const originLat = Number(origin?.latitude)
-  const originLng = Number(origin?.longitude)
-  const destinationLat = Number(destination?.latitude)
-  const destinationLng = Number(destination?.longitude)
-  if (![originLat, originLng, destinationLat, destinationLng].every(Number.isFinite)) return ''
-  const params = new URLSearchParams({
-    api: '1',
-    origin: `${originLat},${originLng}`,
-    destination: `${destinationLat},${destinationLng}`,
-    travelmode: travelMode,
-  })
-  return `https://www.google.com/maps/dir/?${params.toString()}`
-}
-
-function googlePlaceMapUrl(place) {
-  if (!place) return ''
-  if (place.googleMapsURI) return place.googleMapsURI
-  const lat = Number(place.latitude)
-  const lng = Number(place.longitude)
-  const query = Number.isFinite(lat) && Number.isFinite(lng)
-    ? `${lat},${lng}`
-    : [place.name || place.location, place.address].filter(Boolean).join(' ')
-  if (!query) return ''
-  const params = new URLSearchParams({ api: '1', query })
-  if (place.googlePlaceId) params.set('query_place_id', place.googlePlaceId)
-  return `https://www.google.com/maps/search/?${params.toString()}`
-}
-
-function transportIcon(mode, size = 18) {
-  if (mode === 'BUS') return <BusFront size={size} />
-  if (mode === 'RAIL') return <TrainFront size={size} />
-  if (mode === 'FERRY') return <Ship size={size} />
-  if (mode === 'WALK') return <Footprints size={size} />
-  return <Car size={size} />
-}
-
-function modeLabel(mode) {
-  if (mode === 'BUS') return 'Bus'
-  if (mode === 'RAIL') return 'Train / MRT'
-  if (mode === 'FERRY') return 'Ferry / boat'
-  if (mode === 'WALK') return 'Walk'
-  return 'Drive / taxi'
-}
-
-function transitUnavailableCopy(option) {
-  if (option?.availability === 'providers-unavailable' || option?.availability === 'schedule-unavailable') {
-    return {
-      title: 'Schedule unavailable',
-      detail: 'Schedule details are unavailable for this leg right now.',
-    }
-  }
-  return {
-    title: 'Not available',
-    detail: 'No matching service was found for this leg.',
-  }
-}
-
-function transitFareAmount(route) {
-  const fare = route?.travelAdvisory?.transitFare
-  if (!fare?.currencyCode) return null
-  const units = Number(fare.units || 0)
-  const nanos = Number(fare.nanos || 0) / 1_000_000_000
-  const value = units + nanos
-  return Number.isFinite(value) ? value : null
-}
-
-function pickRecommendedRoute(options) {
-  const successful = options.filter((option) => option.route)
-  if (!successful.length) return null
-
-  const walk = successful.find((option) => option.mode === 'WALK')
-  if (walk && (walk.minutes || Infinity) <= 15) return walk.mode
-
-  const transit = successful.filter((option) => option.mode === 'BUS' || option.mode === 'RAIL' || option.mode === 'FERRY')
-  const bestTransit = [...transit].sort((a, b) => {
-    const timeDiff = (a.minutes || Infinity) - (b.minutes || Infinity)
-    if (Math.abs(timeDiff) > 5) return timeDiff
-    const fareA = transitFareAmount(a.route)
-    const fareB = transitFareAmount(b.route)
-    if (fareA != null && fareB != null && fareA !== fareB) return fareA - fareB
-    return timeDiff
-  })[0]
-  const drive = successful.find((option) => option.mode === 'DRIVE')
-
-  // If driving saves a meaningful amount of time, recommend it as the time-efficient option.
-  if (drive && bestTransit && Number(drive.minutes) + 20 < Number(bestTransit.minutes)) return 'DRIVE'
-  if (bestTransit) return bestTransit.mode
-  if (drive) return drive.mode
-  return walk?.mode || successful[0].mode
-}
-
-function recommendationBadge(options, mode) {
-  const recommended = options.find((option) => option.mode === mode && option.route)
-  if (!recommended) return 'Recommended'
-  if (mode === 'WALK') return 'Best for short distance'
-  if (mode === 'DRIVE') return 'Fastest'
-  const fare = transitFareAmount(recommended.route)
-  return fare != null ? 'Best value' : 'Best balance'
-}
-
-function recommendationReason(options, mode) {
-  const recommended = options.find((option) => option.mode === mode && option.route)
-  if (!recommended) return ''
-  const walk = options.find((option) => option.mode === 'WALK' && option.route)
-  const drive = options.find((option) => option.mode === 'DRIVE' && option.route)
-  const transit = options.filter((option) => (option.mode === 'BUS' || option.mode === 'RAIL' || option.mode === 'FERRY') && option.route)
-  const fastestTransit = [...transit].sort((a, b) => (a.minutes || Infinity) - (b.minutes || Infinity))[0]
-
-  if (mode === 'WALK') {
-    return `Walking is recommended because this is a short trip of about ${recommended.minutes || '?'} minutes and it costs nothing.`
-  }
-  if (mode === 'DRIVE') {
-    const comparison = fastestTransit?.minutes ? Math.max(0, fastestTransit.minutes - recommended.minutes) : null
-    return comparison && comparison > 0
-      ? `Driving is the most time-efficient option and saves about ${comparison} minutes compared with the fastest available public transit.`
-      : 'Driving is the fastest available option for this leg.'
-  }
-
-  const fare = formatRouteFare(recommended.route.travelAdvisory?.transitFare)
-  const driveDifference = drive?.minutes ? recommended.minutes - drive.minutes : null
-  const walkSaving = walk?.minutes ? walk.minutes - recommended.minutes : null
-  const label = modeLabel(mode)
-  const parts = [`${label} gives the best balance for this leg at about ${recommended.minutes || '?'} minutes`]
-  if (fare) parts.push(`with a fare of ${fare}`)
-  if (driveDifference != null && driveDifference >= 0 && driveDifference <= 20) parts.push(`only ${driveDifference} minutes slower than driving`)
-  if (walkSaving != null && walkSaving > 15) parts.push(`and saves about ${walkSaving} minutes versus walking`)
-  return `${parts.join(', ')}.`
-}
-
-function transitFactRows(route) {
-  const summary = route?.transitSummary
-  if (!summary) return []
-  return [
-    summary.departureStop && ['Board at', summary.departureStop],
-    summary.lineSummary && ['Take', summary.lineSummary],
-    summary.platform && ['Platform / stand', summary.platform],
-    summary.departureTime && ['Recommended departure', summary.departureTime],
-    route.nextDepartureTime && ['Next service', route.nextDepartureTime],
-    summary.arrivalStop && ['Get off at', summary.arrivalStop],
-    summary.arrivalTime && ['Expected arrival', summary.arrivalTime],
-    summary.stopCount > 0 && ['Stops', `${summary.stopCount}`],
-    summary.transfers > 0 && ['Transfers', `${summary.transfers}`],
-    summary.walkBeforeDuration && ['Walk to transit', [summary.walkBeforeDuration, summary.walkBeforeDistance].filter(Boolean).join(' · ')],
-    summary.walkAfterDuration && ['Walk after transit', [summary.walkAfterDuration, summary.walkAfterDistance].filter(Boolean).join(' · ')],
-  ].filter(Boolean)
-}
-
-function InAppRouteRecommendations({ origin, destination, date, time, utcOffsetMinutes, bufferMinutes = 0, compact = false }) {
-  const [status, setStatus] = useState('idle')
-  const [options, setOptions] = useState([])
-  const [error, setError] = useState('')
-  const [expandedMode, setExpandedMode] = useState('RAIL')
-
-  const ready = isMapped(origin) && isMapped(destination)
-
-  async function loadRoutes(forceRefresh = false) {
-    if (!ready) return
-    setStatus('loading')
-    setError('')
-    try {
-      const requestedDeparture = localDateTimeToUtc(date, time, utcOffsetMinutes, bufferMinutes)
-      const now = Date.now()
-      const maxTransit = now + 100 * 24 * 60 * 60 * 1000
-      const requestedMillis = requestedDeparture ? new Date(requestedDeparture).getTime() : NaN
-      const departureTime = Number.isFinite(requestedMillis) && requestedMillis > now && requestedMillis <= maxTransit
-        ? requestedDeparture
-        : null
-
-      const result = await getRouteComparison({ origin, destination, departureTime, bypassCache: forceRefresh })
-      setOptions(result)
-      const recommended = pickRecommendedRoute(result)
-      setExpandedMode(recommended || result.find((item) => item.route)?.mode || 'RAIL')
-      setStatus('ready')
-    } catch (routeError) {
-      console.error(routeError)
-      setStatus('error')
-      setError(routeError.message || 'Route options could not be loaded.')
-    }
-  }
-
-  const recommendedMode = pickRecommendedRoute(options)
-  const successful = options.filter((option) => option.route)
-  const visibleOptions = options.filter((option) => option.mode !== 'FERRY' || option.route)
-  const transitUnavailable = options.some((option) => ['BUS', 'RAIL', 'FERRY'].includes(option.mode) && !option.route)
-  const regionalSource = regionalTransitSource(origin, destination)
-
-  return (
-    <div className={`route-recommendation route-summary-only ${compact ? 'compact' : ''}`}>
-      {status === 'idle' && (
-        <button type="button" className="secondary-button route-load-button" onClick={() => loadRoutes(false)} disabled={!ready}>
-          <TrainFront size={16} /> {ready ? 'Compare transport options' : 'Map both locations first'}
-        </button>
-      )}
-      {status === 'loading' && <div className="route-loading"><LoaderCircle size={18} /> Checking available public transport schedules…</div>}
-      {error && (
-        <div className={`route-error ${/quota reached/i.test(error) ? 'route-quota-error' : ''}`}>
-          <strong>{/quota reached/i.test(error) ? 'Route demo limit reached' : 'Route options unavailable'}</strong>
-          <span>{error}</span>
-          {/quota reached/i.test(error) && (
-            <div className="route-fallback-links">
-              {googleDirectionsUrl(origin, destination, 'walking') && <a className="ghost-button" href={googleDirectionsUrl(origin, destination, 'walking')} target="_blank" rel="noreferrer"><Footprints size={14} /> Walking map</a>}
-              {googleDirectionsUrl(origin, destination, 'transit') && <a className="ghost-button" href={googleDirectionsUrl(origin, destination, 'transit')} target="_blank" rel="noreferrer"><TrainFront size={14} /> Transit map</a>}
-              {googleDirectionsUrl(origin, destination, 'driving') && <a className="ghost-button" href={googleDirectionsUrl(origin, destination, 'driving')} target="_blank" rel="noreferrer"><Car size={14} /> Driving map</a>}
-            </div>
-          )}
-        </div>
-      )}
-
-      {status === 'ready' && (
-        <>
-          <div className="route-distance-banner">
-            <MapPin size={16} />
-            <span><strong>{origin?.location || origin?.name || 'Start'}</strong> → <strong>{destination?.location || destination?.name || 'Destination'}</strong></span>
-            <b>{successful[0]?.route?.localizedValues?.distance?.text || ''}</b>
-          </div>
-
-          <div className="route-option-grid route-option-grid-dynamic">
-            {visibleOptions.map((option) => {
-              const route = option.route
-              const isRecommended = option.mode === recommendedMode && route
-              const fare = route ? formatRouteFare(route.travelAdvisory?.transitFare) : ''
-              return (
-                <button
-                  type="button"
-                  key={option.mode}
-                  className={`route-option ${isRecommended ? 'recommended' : ''} ${!route ? 'unavailable' : ''} ${expandedMode === option.mode ? 'selected' : ''}`}
-                  aria-pressed={Boolean(route && expandedMode === option.mode)}
-                  onClick={() => route && setExpandedMode(option.mode)}
-                  disabled={!route}
-                >
-                  <div className="route-option-head">
-                    <span>{transportIcon(option.mode, 17)} {modeLabel(option.mode)}</span>
-                    {isRecommended && <small>{recommendationBadge(options, option.mode)}</small>}
-                  </div>
-                  {route ? (
-                    <>
-                      <strong>{route.localizedValues?.duration?.text || `${option.minutes || '?'} min`}</strong>
-                      <span>{route.localizedValues?.distance?.text || `${((route.distanceMeters || 0) / 1000).toFixed(1)} km`}</span>
-                      <em>{option.mode === 'WALK' ? 'Free' : fare || (option.mode === 'DRIVE' ? 'Fare estimate unavailable' : 'Fare unavailable')}</em>
-                    </>
-                  ) : (() => {
-                    const unavailable = transitUnavailableCopy(option)
-                    return <><strong className="route-na">{unavailable.title}</strong><span className="route-unavailable-copy">{unavailable.detail}</span></>
-                  })()}
-                </button>
-              )
-            })}
-          </div>
-
-          {transitUnavailable && regionalSource && (
-            <div className="regional-transit-fallback">
-              <div className="regional-transit-copy">
-                <span className="regional-transit-kicker">Local schedule option</span>
-                <strong>Check the local timetable</strong>
-                <span>Detailed public-transport routing is unavailable for this leg. You can still check the official local schedule.</span>
-              </div>
-              <div className="regional-transit-actions">
-                <a className="secondary-button" href={regionalSource.actionUrl} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Open schedule</a>
-              </div>
-            </div>
-          )}
-
-          {successful.length > 0 && (() => {
-            const active = options.find((option) => option.mode === expandedMode && option.route) || successful[0]
-            const route = active.route
-            const transitRows = active.mode === 'BUS' || active.mode === 'RAIL' || active.mode === 'FERRY' ? transitFactRows(route) : []
-            return (
-              <div className="route-details route-simple-details">
-                <div className="route-details-title">
-                  <div>{transportIcon(active.mode, 18)}<span><strong>{modeLabel(active.mode)}</strong><small>{active.mode === recommendedMode ? 'Our current recommendation' : 'Alternative option'}</small></span></div>
-                  <button type="button" className="ghost-button route-refresh" onClick={() => loadRoutes(true)}>Refresh</button>
-                </div>
-                {active.mode === recommendedMode && (
-                  <div className="route-why-recommended">
-                    <Sparkles size={16} />
-                    <div><strong>Why we recommend this</strong><span>{recommendationReason(options, recommendedMode)}</span></div>
-                  </div>
-                )}
-
-                {active.mode === 'WALK' && (
-                  <div className="route-simple-copy walk-route-copy">
-                    <div><strong>{route.localizedValues?.duration?.text}</strong><span>{route.localizedValues?.distance?.text} walking from this stop to the next destination.</span></div>
-                    {googleDirectionsUrl(origin, destination, 'walking') && <a className="secondary-button walk-map-link" href={googleDirectionsUrl(origin, destination, 'walking')} target="_blank" rel="noreferrer"><Navigation size={15} /> Open walking route</a>}
-                  </div>
-                )}
-
-                {active.mode === 'DRIVE' && (
-                  <div className="route-simple-copy walk-route-copy">
-                    <div><strong>{route.localizedValues?.duration?.text}</strong><span>{route.localizedValues?.distance?.text} by car/taxi. This is a planning estimate, not live traffic.</span></div>
-                    {googleDirectionsUrl(origin, destination, 'driving') && <a className="secondary-button walk-map-link" href={googleDirectionsUrl(origin, destination, 'driving')} target="_blank" rel="noreferrer"><Navigation size={15} /> Open driving route</a>}
-                  </div>
-                )}
-
-                {(active.mode === 'BUS' || active.mode === 'RAIL' || active.mode === 'FERRY') && (
-                  transitRows.length ? (
-                    <div className="transit-facts">
-                      {transitRows.map(([label, value]) => (
-                        <div className="transit-fact" key={`${active.mode}-${label}`}>
-                          <span>{label}</span><strong>{value}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="route-simple-copy"><span>A transit travel time is available, but detailed stop information is not available for this route.</span></div>
-                  )
-                )}
-
-                {route.providerKind === 'local-estimate' && (
-                  <div className="route-provider-note route-provider-note-estimate"><span>Planning estimate · use the map link for live navigation.</span></div>
-                )}
-                {active.mode === 'WALK' && <p className="route-beta-warning">Walking routes can occasionally miss temporary closures or local pedestrian restrictions. Confirm local conditions.</p>}
-              </div>
-            )
-          })()}
-        </>
-      )}
-    </div>
-  )
-}
-
-function MappedLocationSummary({ value, emptyText = 'Not mapped yet' }) {
-  if (!isMapped(value)) return <div className="mapped-location empty"><MapPin size={15} /><span>{emptyText}</span></div>
-  return (
-    <div className="mapped-location">
-      <MapPin size={15} />
-      <div>
-        <strong>{value.location || value.name || 'Mapped location'}</strong>
-        <span>{value.address || 'Coordinates saved'}</span>
-      </div>
-      {value.googleMapsURI && <a href={value.googleMapsURI} target="_blank" rel="noreferrer"><ExternalLink size={14} /></a>}
-    </div>
-  )
-}
-
-function loadNavigationState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(NAVIGATION_STATE_KEY) || '{}')
-    const active = ['plan', 'today', 'budget', 'checklist'].includes(saved.active) ? saved.active : 'plan'
-    return {
-      active,
-      planScreen: saved.planScreen === 'editor' ? 'editor' : 'dashboard',
-      moduleScreen: saved.moduleScreen === 'detail' ? 'detail' : 'dashboard',
-    }
-  } catch {
-    return { active: 'plan', planScreen: 'dashboard', moduleScreen: 'dashboard' }
-  }
-}
 
 function App() {
   const initial = useMemo(() => loadInitialWorkspace(), [])
@@ -1807,7 +130,11 @@ function App() {
   const [data, setData] = useState(initial.data)
   const [pendingDeletePlanId, setPendingDeletePlanId] = useState(null)
 
-  useEffect(() => installButtonDebugger(), [])
+  useEffect(() => {
+    const removeButtonDebug = installButtonDebugger()
+    const removeMapUsageDebug = installMapUsageDebugger()
+    return () => { removeButtonDebug?.(); removeMapUsageDebug?.() }
+  }, [])
 
   useEffect(() => {
     safeStorageSet(STORAGE_KEY, JSON.stringify(data))
@@ -2220,20 +547,17 @@ function PlanAccordionSection({ id, icon: Icon, title, subtitle, open, onToggle,
 
 function PlanView({ data, setData, onBack }) {
   const [showPlaceForm, setShowPlaceForm] = useState(false)
-  const [selectedGooglePlace, setSelectedGooglePlace] = useState(null)
+  const [selectedLocation, setSelectedLocation] = useState(null)
   const [placeForm, setPlaceForm] = useState(() => createBlankPlaceForm(data.trip.startDate))
   const [editingPlaceId, setEditingPlaceId] = useState(null)
   const [placeDateFilter, setPlaceDateFilter] = useState('all')
   const [placeFormError, setPlaceFormError] = useState('')
   const [placeMoveDialog, setPlaceMoveDialog] = useState(null)
   const [openPlanSections, setOpenPlanSections] = useState({ travel: true, flights: false, stays: false, places: false, transport: false })
-  const googleConfigured = hasGoogleMapsKey()
 
   function togglePlanSection(section) {
     setOpenPlanSections((prev) => ({ ...prev, [section]: !prev[section] }))
   }
-
-
 
   function directPlaceTimeProblem(place) {
     if (place.hoursStatus === 'closed') return `${place.name || 'This place'} is closed on ${formatDate(place.visitDate)}. Choose another day.`
@@ -2285,14 +609,7 @@ function PlanView({ data, setData, onBack }) {
   function mapEndpoint(section, place) {
     updateEndpoint(section, {
       location: place.name,
-      address: place.address,
-      googlePlaceId: place.googlePlaceId,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      googleMapsURI: place.googleMapsURI,
-      websiteURI: place.websiteURI,
-      utcOffsetMinutes: place.utcOffsetMinutes,
-      source: 'google',
+      ...locationFields(place),
     })
   }
 
@@ -2311,72 +628,40 @@ function PlanView({ data, setData, onBack }) {
   }
 
   function mapHotel(id, place) {
-    updateHotel(id, {
-      name: place.name, address: place.address, googlePlaceId: place.googlePlaceId,
-      latitude: place.latitude, longitude: place.longitude, googleMapsURI: place.googleMapsURI,
-      websiteURI: place.websiteURI, utcOffsetMinutes: place.utcOffsetMinutes, source: 'google',
-    })
+    updateHotel(id, { name: place.name, ...locationFields(place) })
   }
 
   function deleteHotel(id) {
     setData((prev) => ({ ...prev, trip: { ...prev.trip, hotels: prev.trip.hotels.filter((hotel) => hotel.id !== id) } }))
   }
 
-  function selectGooglePlace(place) {
+  function selectPlace(place) {
     setPlaceFormError('')
-    setSelectedGooglePlace(place)
-    setPlaceForm((prev) => {
-      const visitDate = prev.visitDate || data.trip.startDate
-      const hours = hoursForDate(place.regularOpeningHours, visitDate)
-      return {
-        ...prev,
-        name: place.name,
-        category: inferPlaceCategory(place.primaryType, place.types),
-        open: hours.status === 'open' ? hours.open : '',
-        close: hours.status === 'open' ? hours.close : '',
-        visitDate,
-        address: place.address,
-        googlePlaceId: place.googlePlaceId,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        googleMapsURI: place.googleMapsURI,
-        websiteURI: place.websiteURI,
-        primaryType: place.primaryType,
-        primaryTypeDisplayName: place.primaryTypeDisplayName,
-        regularOpeningHours: place.regularOpeningHours,
-        currentOpeningHours: place.currentOpeningHours,
-        utcOffsetMinutes: place.utcOffsetMinutes,
-        photoURI: place.photoURI || '',
-        photoAttributions: place.photoAttributions || [],
-        photoGoogleMapsURI: place.photoGoogleMapsURI || '',
-        hoursSummary: hours.summary,
-        hoursStatus: hours.status,
-        source: 'google',
-      }
-    })
+    setSelectedLocation(place)
+    setPlaceForm((prev) => ({
+      ...prev,
+      name: place.name,
+      category: place.category || inferPlaceCategory(place.primaryType, place.types),
+      ...locationFields(place),
+      primaryType: place.primaryType || '',
+      primaryTypeDisplayName: place.primaryTypeDisplayName || place.category || '',
+      types: place.types || [],
+      regularOpeningHours: place.regularOpeningHours || null,
+      currentOpeningHours: place.currentOpeningHours || null,
+      hoursSummary: place.hoursSummary || prev.hoursSummary || '',
+      hoursStatus: place.hoursStatus || prev.hoursStatus || 'unavailable',
+    }))
   }
 
   function changeVisitDate(value) {
     setPlaceFormError('')
-    setPlaceForm((prev) => {
-      const hours = selectedGooglePlace ? hoursForDate(selectedGooglePlace.regularOpeningHours, value) : null
-      return {
-        ...prev,
-        visitDate: value,
-        ...(hours ? {
-          open: hours.status === 'open' ? hours.open : (hours.status === 'unavailable' ? prev.open : ''),
-          close: hours.status === 'open' ? hours.close : (hours.status === 'unavailable' ? prev.close : ''),
-          hoursSummary: hours.summary,
-          hoursStatus: hours.status,
-        } : {}),
-      }
-    })
+    setPlaceForm((prev) => ({ ...prev, visitDate: value }))
   }
 
   function closePlaceForm() {
     setShowPlaceForm(false)
     setEditingPlaceId(null)
-    setSelectedGooglePlace(null)
+    setSelectedLocation(null)
     setPlaceForm(createBlankPlaceForm(data.trip.startDate))
     setPlaceFormError('')
   }
@@ -2384,7 +669,7 @@ function PlanView({ data, setData, onBack }) {
   function editPlace(place) {
     setEditingPlaceId(place.id)
     setPlaceForm({ ...createBlankPlaceForm(place.visitDate || data.trip.startDate), ...place })
-    setSelectedGooglePlace(place.source === 'google' ? place : null)
+    setSelectedLocation(isMapped(place) ? place : null)
     setPlaceFormError('')
     setShowPlaceForm(true)
     requestAnimationFrame(() => document.querySelector('.place-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
@@ -2407,13 +692,12 @@ function PlanView({ data, setData, onBack }) {
   function confirmSuggestedPlaceMove() {
     if (!placeMoveDialog?.candidate || !placeMoveDialog?.nextDay) return
     const { candidate, nextDay } = placeMoveDialog
-    const movedCandidate = {
+    commitPlace({
       ...placeWithDateHours(candidate, nextDay.date),
       plannedStart: '',
       suggestedStart: nextDay.start,
       timeSource: 'suggested',
-    }
-    commitPlace(movedCandidate)
+    })
   }
 
   function addPlace(event) {
@@ -2445,24 +729,17 @@ function PlanView({ data, setData, onBack }) {
       if (schedule?.scheduleWarning) {
         const nextDay = findNextAvailableDay(candidateData, candidateId, candidate.visitDate)
         if (nextDay) {
-          setPlaceMoveDialog({
-            candidate,
-            nextDay,
-            warning: schedule.scheduleWarning,
-          })
+          setPlaceMoveDialog({ candidate, nextDay, warning: schedule.scheduleWarning })
           setPlaceFormError('')
           return
         }
         setPlaceFormError(`${schedule.scheduleWarning} No later trip day currently has enough room for this stop.`)
         return
       }
-      if (candidate.timeSource !== 'manual') {
-        candidate = { ...candidate, suggestedStart: schedule?.start || '', plannedStart: '', timeSource: 'suggested' }
-      }
+      if (candidate.timeSource !== 'manual') candidate = { ...candidate, suggestedStart: schedule?.start || '', plannedStart: '', timeSource: 'suggested' }
     } catch (error) {
       console.warn('Place feasibility check skipped:', error)
     }
-
     commitPlace(candidate)
   }
 
@@ -2483,12 +760,16 @@ function PlanView({ data, setData, onBack }) {
     if (placeDateFilter !== 'all' && !tripDatesForPlaces.includes(placeDateFilter)) setPlaceDateFilter('all')
   }, [placeDateFilter, data.trip.startDate, data.trip.endDate])
 
-  const placeDayHours = selectedGooglePlace ? hoursForDate(selectedGooglePlace.regularOpeningHours, placeForm.visitDate) : { status: placeForm.hoursStatus || 'unavailable' }
-  const hoursAreGoogleLocked = placeForm.source === 'google' && placeDayHours.status === 'open'
-  const placeIsClosed = placeForm.source === 'google' && placeDayHours.status === 'closed'
-  const directTimeProblem = directPlaceTimeProblem({ ...placeForm, hoursStatus: placeDayHours.status || placeForm.hoursStatus })
+  const placeIsClosed = placeForm.hoursStatus === 'closed'
+  const directTimeProblem = directPlaceTimeProblem(placeForm)
   const firstHotel = firstHotelForArrival(data.trip.hotels)
   const transferReady = isMapped(data.trip.arrival) && isMapped(firstHotel)
+  const mapLocations = [
+    data.trip.arrival.location ? { ...data.trip.arrival, name: data.trip.arrival.location } : null,
+    ...(data.trip.hotels || []),
+    ...(data.places || []),
+    data.trip.departure.location ? { ...data.trip.departure, name: data.trip.departure.location } : null,
+  ].filter(isMapped)
 
   return (
     <section className="page-section plan-editor-page">
@@ -2502,136 +783,117 @@ function PlanView({ data, setData, onBack }) {
       </div>
 
       <PlanAccordionSection id="plan-travel" icon={MapPin} title="Travel window" subtitle="Destination and trip dates" open={openPlanSections.travel} onToggle={() => togglePlanSection('travel')}>
-      <div className="details-grid travel-window-grid">
-        <EditableCard icon={MapPin} title="Destination">
-          <label>City / Country<input value={data.trip.city} onChange={(e) => updateTripField('city', e.target.value)} /></label>
-          <div className="two-column-fields">
-            <label>Start<input type="date" value={data.trip.startDate} onChange={(e) => updateTravelWindow('startDate', e.target.value)} /></label>
-            <label>End<input type="date" value={data.trip.endDate} onChange={(e) => updateTravelWindow('endDate', e.target.value)} /></label>
-          </div>
-        </EditableCard>
-      </div>
+        <div className="details-grid travel-window-grid">
+          <EditableCard icon={MapPin} title="Destination">
+            <label>City / Country<input value={data.trip.city} onChange={(e) => updateTripField('city', e.target.value)} /></label>
+            <div className="two-column-fields">
+              <label>Start<input type="date" value={data.trip.startDate} onChange={(e) => updateTravelWindow('startDate', e.target.value)} /></label>
+              <label>End<input type="date" value={data.trip.endDate} onChange={(e) => updateTravelWindow('endDate', e.target.value)} /></label>
+            </div>
+          </EditableCard>
+        </div>
+        {mapLocations.length > 0 && <TripMap locations={mapLocations} className="plan-overview-map" />}
       </PlanAccordionSection>
 
       <PlanAccordionSection id="plan-flights" icon={Plane} title="Flights" subtitle="Arrival and departure details" open={openPlanSections.flights} onToggle={() => togglePlanSection('flights')} badge={<span className="coming-soon-pill small">Tracking soon</span>}>
-      <div className="flight-grid">
-        <TravelEndpointCard
-          title="Arrival" value={data.trip.arrival} directionLabel="Coming from"
-          onChange={(patch) => updateEndpoint('arrival', patch)}
-          onPlaceSelect={(place) => mapEndpoint('arrival', place)}
-        />
-        <TravelEndpointCard
-          title="Departure" value={data.trip.departure} directionLabel="Going to"
-          onChange={(patch) => updateEndpoint('departure', patch)}
-          onPlaceSelect={(place) => mapEndpoint('departure', place)}
-        />
-      </div>
+        <div className="flight-grid">
+          <TravelEndpointCard title="Arrival" value={data.trip.arrival} directionLabel="Coming from" onChange={(patch) => updateEndpoint('arrival', patch)} onPlaceSelect={(place) => mapEndpoint('arrival', place)} />
+          <TravelEndpointCard title="Departure" value={data.trip.departure} directionLabel="Going to" onChange={(patch) => updateEndpoint('departure', patch)} onPlaceSelect={(place) => mapEndpoint('departure', place)} />
+        </div>
       </PlanAccordionSection>
 
       <PlanAccordionSection id="plan-stays" icon={BedDouble} title="Stay / base" subtitle="Optional hotel, home, Airbnb, or address" open={openPlanSections.stays} onToggle={() => togglePlanSection('stays')}>
-      <div className="plan-accordion-actions"><button type="button" className="primary-button" onClick={addHotel}><Plus size={17} /> Add stay</button></div>
-      <div className="hotel-list">
-        {data.trip.hotels.map((hotel, index) => (
-          <div className="card hotel-card" key={hotel.id}>
-            <div className="hotel-card-header">
-              <div><div className="card-icon"><Hotel size={18} /></div><div><span className="eyebrow">STAY / BASE {index + 1}</span><strong>{hotel.name || 'Add a stay or address'}</strong></div></div>
-              <button type="button" className="icon-button danger" title="Remove hotel" onClick={() => deleteHotel(hotel.id)}><Trash2 size={17} /></button>
+        <div className="plan-accordion-actions"><button type="button" className="primary-button" onClick={addHotel}><Plus size={17} /> Add stay</button></div>
+        <div className="hotel-list">
+          {data.trip.hotels.map((hotel, index) => (
+            <div className="card hotel-card" key={hotel.id}>
+              <div className="hotel-card-header">
+                <div><div className="card-icon"><Hotel size={18} /></div><div><span className="eyebrow">STAY / BASE {index + 1}</span><strong>{hotel.name || 'Add a stay or address'}</strong></div></div>
+                <button type="button" className="icon-button danger" title="Remove hotel" onClick={() => deleteHotel(hotel.id)}><Trash2 size={17} /></button>
+              </div>
+              <LocationSearch compact placeholder="Search hotel or address…" initialValue={hotel.name || hotel.address || ''} onSelect={(place) => mapHotel(hotel.id, place)} />
+              <MappedLocationSummary value={hotel} emptyText="Not mapped yet · optional for routing" />
+              <div className="hotel-fields">
+                <label className="hotel-name-field">Stay / base name<input placeholder="Hotel, friend's house, apartment…" value={hotel.name} onChange={(e) => updateHotel(hotel.id, { name: e.target.value })} /></label>
+                <label className="hotel-address-field">Address<input placeholder="Optional manual address" value={hotel.address || ''} onChange={(e) => updateHotel(hotel.id, { address: e.target.value, provider: isMapped(hotel) ? hotel.provider : 'manual' })} /></label>
+                <label>Check-in date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={hotel.checkInDate || ''} onChange={(e) => updateHotel(hotel.id, { checkInDate: e.target.value })} /></label>
+                <label>Check-in time<input type="time" value={hotel.checkIn || ''} onChange={(e) => updateHotel(hotel.id, { checkIn: e.target.value })} /></label>
+                <label>Check-out date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={hotel.checkOutDate || ''} onChange={(e) => updateHotel(hotel.id, { checkOutDate: e.target.value })} /></label>
+                <label>Check-out time<input type="time" value={hotel.checkOut || ''} onChange={(e) => updateHotel(hotel.id, { checkOut: e.target.value })} /></label>
+              </div>
             </div>
-            <GooglePlacePicker compact placeholder="Search hotel or address…" onSelect={(place) => mapHotel(hotel.id, place)} />
-            <MappedLocationSummary value={hotel} emptyText="Not mapped yet · optional for routing" />
-            <div className="hotel-fields">
-              <label className="hotel-name-field">Stay / base name<input placeholder="Hotel, friend's house, apartment…" value={hotel.name} onChange={(e) => updateHotel(hotel.id, { name: e.target.value })} /></label>
-              <label className="hotel-address-field">Address<input placeholder="Optional manual address" value={hotel.address || ''} onChange={(e) => updateHotel(hotel.id, { address: e.target.value, source: hotel.googlePlaceId ? hotel.source : 'manual' })} /></label>
-              <label>Check-in date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={hotel.checkInDate || ''} onChange={(e) => updateHotel(hotel.id, { checkInDate: e.target.value })} /></label>
-              <label>Check-in time<input type="time" value={hotel.checkIn || ''} onChange={(e) => updateHotel(hotel.id, { checkIn: e.target.value })} /></label>
-              <label>Check-out date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={hotel.checkOutDate || ''} onChange={(e) => updateHotel(hotel.id, { checkOutDate: e.target.value })} /></label>
-              <label>Check-out time<input type="time" value={hotel.checkOut || ''} onChange={(e) => updateHotel(hotel.id, { checkOut: e.target.value })} /></label>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       </PlanAccordionSection>
 
       <PlanAccordionSection id="plan-places" icon={MapIcon} title="Places" subtitle={`${data.places.length} saved stop${data.places.length === 1 ? '' : 's'} · filter, edit, or add more`} open={openPlanSections.places} onToggle={() => togglePlanSection('places')}>
         <div className="plan-accordion-actions places-heading-actions">
           <label className="place-date-filter"><CalendarDays size={15} /><select value={placeDateFilter} onChange={(e) => setPlaceDateFilter(e.target.value)}><option value="all">All dates</option>{tripDatesForPlaces.map((date) => <option key={date} value={date}>{formatDate(date)}</option>)}</select></label>
-          <button type="button" className="primary-button" onClick={() => { if (showPlaceForm && !editingPlaceId) closePlaceForm(); else { setEditingPlaceId(null); setSelectedGooglePlace(null); setPlaceForm(createBlankPlaceForm(data.trip.startDate)); setShowPlaceForm(true) } }}><Plus size={17} /> Add place</button>
+          <button type="button" className="primary-button" onClick={() => { if (showPlaceForm && !editingPlaceId) closePlaceForm(); else { setEditingPlaceId(null); setSelectedLocation(null); setPlaceForm(createBlankPlaceForm(data.trip.startDate)); setShowPlaceForm(true) } }}><Plus size={17} /> Add place</button>
         </div>
 
-      {showPlaceForm && (
-        <form className="inline-form place-form card" onSubmit={addPlace}>
-          <div className="form-full-width edit-place-form-title"><div><span className="eyebrow">{editingPlaceId ? 'EDIT PLACE' : 'ADD PLACE'}</span><strong>{editingPlaceId ? 'Update this stop' : 'Add a new stop'}</strong></div>{editingPlaceId && <button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel edit</button>}</div>
-          <div className="form-full-width"><GooglePlacePicker onSelect={selectGooglePlace} placeholder="Search place or address…" /></div>
-          {!googleConfigured && <div className="form-full-width google-setup-warning">The app cannot see a Google demo key yet. Confirm <strong>.env.local</strong> contains <strong>VITE_GOOGLE_MAPS_API_KEY</strong>, then restart Vite.</div>}
-          {selectedGooglePlace && (
-            <div className="selected-place-preview form-full-width">
-              <div className="selected-place-heading"><div className="place-pin"><MapPin size={19} /></div><div><span className="eyebrow">SELECTED PLACE</span><strong>{selectedGooglePlace.name}</strong><span>{selectedGooglePlace.address || 'Address unavailable'}</span></div></div>
-              <div className="selected-place-meta">
-                <span><Clock3 size={14} />{hoursForDate(selectedGooglePlace.regularOpeningHours, placeForm.visitDate).summary}</span>
-                {selectedGooglePlace.primaryTypeDisplayName && <span>{selectedGooglePlace.primaryTypeDisplayName}</span>}
-                {selectedGooglePlace.googleMapsURI && <a href={selectedGooglePlace.googleMapsURI} target="_blank" rel="noreferrer">Open map <ExternalLink size={13} /></a>}
+        {showPlaceForm && (
+          <form className="inline-form place-form card" onSubmit={addPlace}>
+            <div className="form-full-width edit-place-form-title"><div><span className="eyebrow">{editingPlaceId ? 'EDIT PLACE' : 'ADD PLACE'}</span><strong>{editingPlaceId ? 'Update this stop' : 'Add a new stop'}</strong></div>{editingPlaceId && <button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel edit</button>}</div>
+            <div className="form-full-width"><LocationSearch onSelect={selectPlace} placeholder="Search a place or address…" /></div>
+            {selectedLocation && (
+              <div className="selected-place-preview form-full-width">
+                <div className="selected-place-heading"><div className="place-pin"><MapPin size={19} /></div><div><span className="eyebrow">SELECTED PLACE</span><strong>{selectedLocation.name}</strong><span>{selectedLocation.address || 'Address unavailable'}</span></div></div>
+                <div className="selected-place-meta">
+                  <span>{selectedLocation.primaryTypeDisplayName || selectedLocation.category || inferPlaceCategory(selectedLocation.primaryType, selectedLocation.types)}</span>
+                  {isMapped(selectedLocation) && <a href={locationMapUrl(selectedLocation)} target="_blank" rel="noreferrer">Open map <ExternalLink size={13} /></a>}
+                </div>
               </div>
-            </div>
-          )}
-          <label className="form-span-2">Place name<input placeholder="Search above or type manually" value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} /></label>
-          <label className="form-span-2">Address<input placeholder="Filled automatically when available" value={placeForm.address} onChange={(e) => setPlaceForm({ ...placeForm, address: e.target.value })} /></label>
-          <label>Visit date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={placeForm.visitDate} onChange={(e) => changeVisitDate(e.target.value)} /></label>
-          <label>Planned start <span className="optional-field-note">Optional</span><input className={(placeIsClosed || directTimeProblem) ? 'invalid-time-input' : ''} type="time" value={placeForm.plannedStart} onChange={(e) => { setPlaceFormError(''); setPlaceForm({ ...placeForm, plannedStart: e.target.value, timeSource: e.target.value ? 'manual' : 'suggested' }) }} /><small className="field-help">Leave blank and Today will suggest a time based on distance and closing hours.</small></label>
-          <label>Category<select value={placeForm.category} onChange={(e) => setPlaceForm({ ...placeForm, category: e.target.value })}><option>Attraction</option><option>Shopping</option><option>Food</option><option>Nature</option><option>Hotel</option><option>Transport</option></select></label>
-          <label>Priority<select value={placeForm.priority} onChange={(e) => setPlaceForm({ ...placeForm, priority: e.target.value })}><option>Must Visit</option><option>High</option><option>Optional</option></select></label>
-          <label>Visit duration (min)<input type="number" min="15" step="15" value={placeForm.duration} onChange={(e) => setPlaceForm({ ...placeForm, duration: e.target.value })} /></label>
-          <label className="form-full-width">Notes <span className="optional-field-note">Optional</span><textarea rows="3" placeholder="Add reminders, booking details, food to try, links, or anything you want to remember…" value={placeForm.notes || ''} onChange={(e) => setPlaceForm({ ...placeForm, notes: e.target.value })} /></label>
-          <label>Opens {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.open || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, open: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
-          <label>Closes {hoursAreGoogleLocked ? '(Google)' : '(manual if unavailable)'}<input className={hoursAreGoogleLocked ? 'locked-google-time' : ''} type="time" value={placeForm.close || ''} readOnly={hoursAreGoogleLocked || placeIsClosed} disabled={hoursAreGoogleLocked || placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, close: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
-          {placeForm.hoursSummary && <div className={`google-hours-note form-span-2 ${placeIsClosed ? 'closed-day' : ''}`}><Clock3 size={15} /><span>{'Hours'} for {formatDate(placeForm.visitDate)}: <strong>{placeForm.hoursSummary}</strong>{placeIsClosed && <em>Choose another day — this place cannot be added to this day's itinerary.</em>}</span></div>}
-          {(placeFormError || directTimeProblem) && <div className="place-schedule-error form-full-width"><Clock3 size={16} /><div><strong>This stop cannot be added yet</strong><span>{placeFormError || directTimeProblem}</span></div></div>}
-          <div className="form-actions"><button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel</button><button type="submit" className="primary-button" disabled={placeIsClosed || Boolean(directTimeProblem)}>{editingPlaceId ? 'Update & sync to Today' : 'Save & sync to Today'}</button></div>
-        </form>
-      )}
+            )}
+            <label className="form-span-2">Place name<input placeholder="Search above or type manually" value={placeForm.name} onChange={(e) => setPlaceForm({ ...placeForm, name: e.target.value })} /></label>
+            <label className="form-span-2">Address<input placeholder="Filled automatically when available" value={placeForm.address} onChange={(e) => setPlaceForm({ ...placeForm, address: e.target.value })} /></label>
+            <label>Visit date<input type="date" min={data.trip.startDate} max={data.trip.endDate} value={placeForm.visitDate} onChange={(e) => changeVisitDate(e.target.value)} /></label>
+            <label>Planned start <span className="optional-field-note">Optional</span><input className={(placeIsClosed || directTimeProblem) ? 'invalid-time-input' : ''} type="time" value={placeForm.plannedStart} onChange={(e) => { setPlaceFormError(''); setPlaceForm({ ...placeForm, plannedStart: e.target.value, timeSource: e.target.value ? 'manual' : 'suggested' }) }} /><small className="field-help">Leave blank and Today will suggest a time based on distance and closing hours.</small></label>
+            <label>Category<select value={placeForm.category} onChange={(e) => setPlaceForm({ ...placeForm, category: e.target.value })}><option>Attraction</option><option>Shopping</option><option>Food</option><option>Cafe</option><option>Museum</option><option>Nature</option><option>Hotel</option><option>Transport</option><option>Entertainment</option></select></label>
+            <label>Priority<select value={placeForm.priority} onChange={(e) => setPlaceForm({ ...placeForm, priority: e.target.value })}><option>Must Visit</option><option>High</option><option>Optional</option></select></label>
+            <label>Visit duration (min)<input type="number" min="15" step="15" value={placeForm.duration} onChange={(e) => setPlaceForm({ ...placeForm, duration: e.target.value })} /></label>
+            <label className="form-full-width">Notes <span className="optional-field-note">Optional</span><textarea rows="3" placeholder="Add reminders, booking details, food to try, links, or anything you want to remember…" value={placeForm.notes || ''} onChange={(e) => setPlaceForm({ ...placeForm, notes: e.target.value })} /></label>
+            <label>Opens <span className="optional-field-note">Optional</span><input type="time" value={placeForm.open || ''} disabled={placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, open: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
+            <label>Closes <span className="optional-field-note">Optional</span><input type="time" value={placeForm.close || ''} disabled={placeIsClosed} onChange={(e) => setPlaceForm({ ...placeForm, close: e.target.value, hoursStatus: 'manual', hoursSummary: 'Manual hours' })} /></label>
+            {placeForm.hoursSummary && <div className={`place-hours-note form-span-2 ${placeIsClosed ? 'closed-day' : ''}`}><Clock3 size={15} /><span>Hours for {formatDate(placeForm.visitDate)}: <strong>{placeForm.hoursSummary}</strong></span></div>}
+            {(placeFormError || directTimeProblem) && <div className="place-schedule-error form-full-width"><Clock3 size={16} /><div><strong>This stop cannot be added yet</strong><span>{placeFormError || directTimeProblem}</span></div></div>}
+            <div className="form-actions"><button type="button" className="ghost-button" onClick={closePlaceForm}>Cancel</button><button type="submit" className="primary-button" disabled={placeIsClosed || Boolean(directTimeProblem)}>{editingPlaceId ? 'Update & sync to Today' : 'Save & sync to Today'}</button></div>
+          </form>
+        )}
 
-      <div className="places-list">
-        {visiblePlaces.map((place) => (
-          <article className="place-row" key={place.id}>
-            <div className="place-pin"><MapPin size={19} /></div>
-            <div className="place-main">
-              <div className="place-title-row"><strong>{place.name}</strong><PriorityPill priority={place.priority} /></div>
-              <span>{place.category} · {place.duration} min · {formatDate(place.visitDate)}{place.timeSource === 'manual' && place.plannedStart ? ` at ${place.plannedStart}` : place.suggestedStart ? ` · Suggested ${place.suggestedStart}` : ' · Smart time pending'}</span>
-              {place.address && <small className="place-address">{place.address}</small>}
-              {place.notes && <small className="place-notes-preview">{place.notes}</small>}
-            </div>
-            <div className={`place-hours ${place.hoursStatus === 'closed' ? 'closed-day' : ''}`}><Clock3 size={15} /> {place.hoursSummary || `${place.open} — ${place.close}`}</div>
-            <div className="place-actions">
-              <button type="button" className="icon-button" title="Edit place" onClick={() => editPlace(place)}><Pencil size={16} /></button>
-              {place.googleMapsURI && <a className="icon-button" title="Open map" href={place.googleMapsURI} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>}
-              <button type="button" className="icon-button danger" title="Delete place" onClick={() => deletePlace(place.id)}><Trash2 size={17} /></button>
-            </div>
-          </article>
-        ))}
-        {!visiblePlaces.length && <div className="empty-place-filter">No places scheduled for this date yet.</div>}
-      </div>
+        <div className="places-list">
+          {visiblePlaces.map((place) => (
+            <article className="place-row" key={place.id}>
+              <div className="place-pin"><MapPin size={19} /></div>
+              <div className="place-main">
+                <div className="place-title-row"><strong>{place.name}</strong><PriorityPill priority={place.priority} /></div>
+                <span>{place.category} · {place.duration} min · {formatDate(place.visitDate)}{place.timeSource === 'manual' && place.plannedStart ? ` at ${place.plannedStart}` : place.suggestedStart ? ` · Suggested ${place.suggestedStart}` : ' · Smart time pending'}</span>
+                {place.address && <small className="place-address">{place.address}</small>}
+                {place.notes && <small className="place-notes-preview">{place.notes}</small>}
+              </div>
+              <div className={`place-hours ${place.hoursStatus === 'closed' ? 'closed-day' : ''}`}><Clock3 size={15} /> {place.hoursSummary || [place.open, place.close].filter(Boolean).join(' — ') || 'Hours unavailable'}</div>
+              <div className="place-actions">
+                <button type="button" className="icon-button" title="Edit place" onClick={() => editPlace(place)}><Pencil size={16} /></button>
+                {isMapped(place) && <a className="icon-button" title="Open map" href={locationMapUrl(place)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a>}
+                <button type="button" className="icon-button danger" title="Delete place" onClick={() => deletePlace(place.id)}><Trash2 size={17} /></button>
+              </div>
+            </article>
+          ))}
+          {!visiblePlaces.length && <div className="empty-place-filter">No places scheduled for this date yet.</div>}
+        </div>
       </PlanAccordionSection>
 
-      <PlanAccordionSection id="plan-transport" icon={TrainFront} title="Transport" subtitle="Airport-to-stay comparison and routing" open={openPlanSections.transport} onToggle={() => togglePlanSection('transport')}>
-      <div className={`card transfer-ready-card ${transferReady ? 'ready' : ''}`}>
-        <div className="transfer-icon"><TrainFront size={22} /></div>
-        <div className="transfer-copy">
-          <span className="eyebrow">AIRPORT → FIRST STAY / BASE</span>
-          <strong>{transferReady ? `${data.trip.arrival.location || 'Arrival point'} → ${firstHotel.name}` : 'Transport comparison becomes available after both locations are mapped.'}</strong>
-          <p>{transferReady ? 'Compare available options by travel time, distance, and fare when available.' : 'This section is optional if you do not need airport-to-stay routing.'}</p>
-        </div>
-        {transferReady && (
-          <div className="transfer-route-full">
-            <InAppRouteRecommendations
-              origin={data.trip.arrival}
-              destination={firstHotel}
-              date={data.trip.arrival.date}
-              time={data.trip.arrival.time}
-              utcOffsetMinutes={data.trip.arrival.utcOffsetMinutes ?? firstHotel.utcOffsetMinutes}
-              bufferMinutes={data.trip.arrival.transferBufferMinutes || 0}
-            />
+      <PlanAccordionSection id="plan-transport" icon={TrainFront} title="Transport" subtitle="Local estimates, on-demand routes, and nearby transit" open={openPlanSections.transport} onToggle={() => togglePlanSection('transport')}>
+        <div className={`card transfer-ready-card ${transferReady ? 'ready' : ''}`}>
+          <div className="transfer-icon"><TrainFront size={22} /></div>
+          <div className="transfer-copy">
+            <span className="eyebrow">AIRPORT → FIRST STAY / BASE</span>
+            <strong>{transferReady ? `${data.trip.arrival.location || 'Arrival point'} → ${firstHotel.name}` : 'Transport comparison becomes available after both locations are mapped.'}</strong>
+            <p>{transferReady ? 'Approximate travel options are local. A detailed route is requested only when you select a mode.' : 'This section is optional if you do not need airport-to-stay routing.'}</p>
           </div>
-        )}
-      </div>
+          {transferReady && <div className="transfer-route-full"><InAppRouteRecommendations origin={data.trip.arrival} destination={firstHotel} date={data.trip.arrival.date} time={data.trip.arrival.time} utcOffsetMinutes={data.trip.arrival.utcOffsetMinutes ?? firstHotel?.utcOffsetMinutes} /></div>}
+          {isMapped(firstHotel) && <NearbyTransportStops location={firstHotel} />}
+        </div>
       </PlanAccordionSection>
 
       <AppDialog
@@ -2682,56 +944,6 @@ function TravelEndpointCard({ title, value, directionLabel, onChange, onPlaceSel
       <div className="flight-coming-soon"><Sparkles size={15} /><div><strong>Future flight intelligence</strong><span>Automatic flight lookup, live delay/status, terminal and gate updates, and itinerary recalculation are coming later.</span></div></div>
     </div>
   )
-}
-
-function buildBasicDayItems(data, date) {
-  const items = []
-  const trip = data?.trip || {}
-  const arrival = trip.arrival || {}
-  const departure = trip.departure || {}
-  const startPreference = dayStartPreference(data, date)
-  const arrangement = dayArrangementPreference(data, date)
-  const stay = hotelForDate(trip.hotels || [], date) || firstHotelForArrival(trip.hotels || [])
-
-  if (arrival.date === date && (startPreference === 'arrival_stay' || startPreference === 'arrival_places')) {
-    items.push({
-      key: 'arrival', kind: 'arrival', start: arrival.time || '', end: '',
-      title: `Arrive · ${arrival.location || 'Arrival point'}`,
-      subtitle: `${transportDescriptor(arrival)}${arrival.from ? ` · from ${arrival.from}` : ''}`,
-      detail: arrival.address || 'Arrival location', mapUri: arrival.googleMapsURI || '', locationData: arrival, sort: arrival.time || '00:00',
-    })
-  }
-
-  if (arrival.date === date && startPreference === 'arrival_stay' && isMapped(stay)) {
-    const airportReady = addMinutes(arrival.time || '09:00', Number(arrival.transferBufferMinutes || 0))
-    const transferToStay = isMapped(arrival) ? estimateTransferMinutes(arrival, stay) : { minutes: 15 }
-    const stayArrivalTime = addMinutes(airportReady, transferToStay.minutes)
-    items.push({ key: `arrival-stay-${stay.id || date}`, kind: 'stay', start: stayArrivalTime, end: '', title: `Stay/base · ${stay.name || 'Accommodation'}`, subtitle: stay.address || 'Stay/base', detail: 'First stop after the airport', mapUri: stay.googleMapsURI || '', locationData: stay, sort: stayArrivalTime || '00:01' })
-  }
-
-  if (startPreference === 'stay' && isMapped(stay)) {
-    items.push({ key: `day-start-stay-${date}`, kind: 'start', start: '09:00', end: '', title: `Start · ${stay.name || 'Stay/base'}`, subtitle: stay.address || 'Stay/base', detail: 'Your day starts here', mapUri: stay.googleMapsURI || '', locationData: stay, sort: '00:01' })
-  }
-
-  ;(trip.hotels || []).forEach((hotel) => {
-    if (hotel.checkInDate === date && startPreference !== 'stay' && !(startPreference === 'arrival_stay' && String(stay?.id) === String(hotel.id))) items.push({ key: `hotel-checkin-${hotel.id}`, kind: 'hotel', start: hotel.checkIn || '15:00', end: '', title: `Stay check-in · ${hotel.name || 'Accommodation'}`, subtitle: hotel.address || 'Accommodation', detail: 'Check-in', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkIn || '15:00' })
-    if (hotel.checkOutDate === date) items.push({ key: `hotel-checkout-${hotel.id}`, kind: 'hotel', start: hotel.checkOut || '11:00', end: '', title: `Stay check-out · ${hotel.name || 'Accommodation'}`, subtitle: hotel.address || 'Accommodation', detail: 'Check-out', mapUri: hotel.googleMapsURI || '', locationData: hotel, sort: hotel.checkOut || '11:00' })
-  })
-
-  ;(data?.places || []).filter((place) => place.visitDate === date).forEach((place) => {
-    const start = (place.timeSource === 'manual' ? place.plannedStart : (place.suggestedStart || place.plannedStart)) || ''
-    items.push({ key: `place-${place.id}`, kind: 'place', start, end: start ? addMinutes(start, place.duration) : '', title: place.name || 'Place', subtitle: `${place.category || 'Place'} · ${place.duration || 60} min${place.priority ? ` · ${place.priority}` : ''}`, detail: place.hoursSummary || 'Hours unavailable', notes: place.notes || '', mapUri: place.googleMapsURI || '', locationData: place, sort: start || '98:59', suggestedTime: false, scheduleWarning: '' })
-  })
-
-  if (arrangement.endMode === 'stay' && isMapped(stay) && (data?.places || []).some((place) => place.visitDate === date)) {
-    items.push({ key: `return-stay-${date}`, kind: 'return', start: '', end: '', title: `Return · ${stay.name || 'Stay/base'}`, subtitle: stay.address || 'Stay/base', detail: 'Preferred end point for this day', mapUri: stay.googleMapsURI || '', locationData: stay, sort: '98:58' })
-  }
-
-  if (departure.date === date) {
-    items.push({ key: 'departure', kind: 'departure', start: departure.time || '', end: '', title: `Depart · ${departure.location || 'Departure point'}`, subtitle: `${transportDescriptor(departure)}${departure.to ? ` · to ${departure.to}` : ''}`, detail: departure.address || 'Departure location', mapUri: departure.googleMapsURI || '', locationData: departure, sort: departure.time || '99:00' })
-  }
-
-  return items.sort((a, b) => String(a.sort || '').localeCompare(String(b.sort || '')))
 }
 
 function TodayView({ data, setData }) {
@@ -2804,23 +1016,22 @@ function TodayView({ data, setData }) {
     setOpenTodaySections((prev) => ({ ...prev, [section]: !prev[section] }))
   }
 
-  function addGooglePlaceToToday(place) {
+  function addPlaceToToday(place) {
     if (!place) return
     if (isPlaceAlreadySaved(place, data.places || [])) {
       setNearbyPlaces((prev) => prev.filter((item) => !isPlaceAlreadySaved(item, data.places || [])))
       setNearbyError(`${place.name || 'This place'} is already on your trip list.`)
       return
     }
+
     try {
-      // Nearby search already gives us the place id, name, address, coordinates and type.
-      // Do not make a second GetPlace request just to add it to today's checklist.
-      const source = place
       let candidate = {
         ...createBlankPlaceForm(selectedDate),
-        ...source,
+        ...place,
+        ...locationFields(place),
         id: Date.now(),
-        name: source.name || 'New place',
-        category: inferPlaceCategory(source.primaryType, source.types),
+        name: place.name || 'New place',
+        category: place.category || inferPlaceCategory(place.primaryType, place.types),
         priority: 'High',
         duration: 60,
         visitDate: selectedDate,
@@ -2832,10 +1043,10 @@ function TodayView({ data, setData }) {
       candidate = placeWithDateHours(candidate, selectedDate)
       setData((prev) => applySmartSuggestionsForDate({ ...prev, places: [...(prev.places || []), candidate] }, selectedDate))
       setShowTodayAddPlace(false)
-      setNearbyPlaces((prev) => prev.filter((item) => item.googlePlaceId !== candidate.googlePlaceId))
+      setNearbyPlaces((prev) => prev.filter((item) => !isPlaceAlreadySaved(item, [candidate])))
     } catch (error) {
       console.error('Quick add place failed:', error)
-      setNearbyError('This place could not be added right now. Try again or add it from Plan.')
+      setNearbyError('This place could not be added right now. Your saved itinerary was not changed.')
     }
   }
 
@@ -2844,59 +1055,47 @@ function TodayView({ data, setData }) {
       setNearbyError('Map at least one destination first so nearby ideas know where to look.')
       return
     }
+
     setNearbyStatus('loading')
     setNearbyError('')
-    setNearbyPlaces([])
-
-    const existingIds = new Set((data.places || []).map((place) => place.googlePlaceId).filter(Boolean))
     const deduped = new Map()
     const failures = []
+    const clusters = clusterLocations(recommendationAnchors).slice(0, 2)
 
-    // Search anchors one at a time instead of bursting several requests at once. This is kinder to
-    // demo quotas, and we stop early once there are enough useful suggestions to render.
-    for (const anchor of recommendationAnchors) {
+    // One broad POI request per itinerary cluster. Categories are assigned and ranked locally.
+    for (const cluster of clusters) {
+      const anchor = cluster[0]
+      if (!anchor) continue
       try {
-        const results = await searchGoogleNearbyPlaces({
-          latitude: anchor.locationData.latitude,
-          longitude: anchor.locationData.longitude,
-          anchorName: anchor.label,
-          minDistanceMeters: 0,
-          maxDistanceMeters: 4000,
-          maxResults: 10,
-        })
-        results.forEach((place) => {
-          if (!place.googlePlaceId || existingIds.has(place.googlePlaceId)) return
+        const results = await getNearbyPlaces(anchor.locationData, { radiusMeters: 1800, limit: 40, kind: 'ideas' })
+        for (const place of results) {
+          if (isPlaceAlreadySaved(place, data.places || [])) continue
           const candidate = { ...place, nearAnchor: anchor.label }
-          const current = deduped.get(place.googlePlaceId)
-          if (!current || Number(candidate.distanceMeters || Infinity) < Number(current.distanceMeters || Infinity)) {
-            deduped.set(place.googlePlaceId, candidate)
-          }
-        })
+          const keys = placeIdentityKeys(candidate)
+          const dedupeKey = keys[0] || candidate.locationId || `${candidate.name}-${candidate.latitude}-${candidate.longitude}`
+          const current = deduped.get(dedupeKey)
+          if (!current || Number(candidate.distanceMeters || Infinity) < Number(current.distanceMeters || Infinity)) deduped.set(dedupeKey, candidate)
+        }
       } catch (error) {
-        console.error(`Nearby recommendations failed around ${anchor.label}:`, error)
+        console.warn(`Nearby recommendations unavailable around ${anchor.label}:`, error)
         failures.push(error)
       }
-      if (deduped.size >= 16) break
     }
 
-    const results = [...deduped.values()]
-      .sort((a, b) => Number(a.distanceMeters || Infinity) - Number(b.distanceMeters || Infinity))
-      .slice(0, 16)
-
+    const results = rankNearbyPlaces([...deduped.values()], { savedPlaces: data.places || [] }).slice(0, 16)
     setNearbyPlaces(results)
+
     if (results.length) {
       setNearbyStatus('ready')
       return
     }
-
-    if (failures.length === recommendationAnchors.length) {
+    if (failures.length === clusters.length && failures.length) {
       setNearbyStatus('error')
-      setNearbyError('Nearby suggestions could not load right now. Try again, or check whether your browser is blocking map requests.')
+      setNearbyError('Nearby place discovery is temporarily unavailable. Search, itinerary, maps, and route estimates still work.')
       return
     }
-
     setNearbyStatus('ready')
-    setNearbyError('No matching places were found within 4 km of your mapped destinations.')
+    setNearbyError('No matching places were found within about 2 km of your itinerary clusters.')
   }
 
   function requestRemovePlace(item) {
@@ -3268,7 +1467,7 @@ function TodayView({ data, setData }) {
                     <div className="timeline-content">
                       <div className={`timeline-title-row ${item.kind === 'place' ? 'with-place-photo' : ''}`}>
                         <div className="timeline-title-copy"><strong>{item.title}</strong><span>{item.subtitle}</span><small>{item.detail}</small>{item.notes && <p className="timeline-place-notes">{item.notes}</p>}</div>
-                        {item.kind === 'place' && <PlacePhoto placeId={item.locationData?.googlePlaceId} place={item.locationData} name={item.title} className="timeline-place-photo" />}
+                        {item.kind === 'place' && <PlacePhoto place={item.locationData} name={item.title} className="timeline-place-photo" />}
                         <StatusPill status={status} />
                       </div>
                       {item.scheduleWarning && nextDaySuggestion && (
@@ -3279,7 +1478,7 @@ function TodayView({ data, setData }) {
                         </div>
                       )}
                       {(() => {
-                        const mapUri = item.mapUri || googlePlaceMapUrl(item.locationData)
+                        const mapUri = item.mapUri || locationMapUrl(item.locationData)
                         const placeActionsClass = item.kind === 'place' ? ' stop-actions' : ''
                         if (status === 'current' || status === 'upcoming') {
                           return <div className={`timeline-actions${placeActionsClass}`}><button type="button" className="primary-button" onClick={() => setStatus(item.key, 'done')}><CheckCircle2 size={17} /> Done</button><button type="button" className="ghost-button" onClick={() => setStatus(item.key, 'skipped')}>Skip</button>{mapUri && <a className="secondary-button" href={mapUri} target="_blank" rel="noreferrer"><Navigation size={17} /> Map</a>}{item.kind === 'place' && <button type="button" className="ghost-button remove-stop" onClick={() => requestRemovePlace(item)}><Trash2 size={15} /> Remove</button>}</div>
@@ -3310,14 +1509,14 @@ function TodayView({ data, setData }) {
             {showTodayAddPlace && (
               <div className="today-add-place-panel">
                 <div className="today-add-place-search">
-                  <GooglePlacePicker onSelect={addGooglePlaceToToday} placeholder="Search for a place…" compact />
+                  <LocationSearch onSelect={addPlaceToToday} placeholder="Search for a place…" compact />
                 </div>
               </div>
             )}
 
             <div className="nearby-discovery">
               <div className="nearby-head">
-                <div><strong>Nearby ideas</strong><span>{recommendationAnchors.length ? `Within 4 km of any mapped destination on ${formatShortDate(selectedDate)}` : 'Map a destination to discover nearby places'}</span></div>
+                <div><strong>Nearby ideas</strong><span>{recommendationAnchors.length ? `Within about 2 km of up to two itinerary clusters on ${formatShortDate(selectedDate)}` : 'Map a destination to discover nearby places'}</span></div>
                 <button
                   type="button"
                   className="ghost-button nearby-refresh"
@@ -3335,12 +1534,12 @@ function TodayView({ data, setData }) {
                 <>
                   <div className="nearby-list">
                     {visibleNearbyPlaces.map((place) => (
-                      <article className="nearby-card" key={place.googlePlaceId || place.name}>
-                        <PlacePhoto placeId={place.googlePlaceId} place={place} name={place.name} className="nearby-photo" />
+                      <article className="nearby-card" key={place.locationId || place.providerId || `${place.name}-${place.latitude}-${place.longitude}`}>
+                        <PlacePhoto place={place} name={place.name} className="nearby-photo" />
                         <div className="nearby-distance">
                           {formatNearbyDistance(place.distanceMeters)}
                         </div>
-                        <button type="button" className="nearby-add" title={`Add ${place.name}`} aria-label={`Add ${place.name}`} onClick={() => addGooglePlaceToToday(place)}><Plus size={18} strokeWidth={2.35} /></button>
+                        <button type="button" className="nearby-add" title={`Add ${place.name}`} aria-label={`Add ${place.name}`} onClick={() => addPlaceToToday(place)}><Plus size={18} strokeWidth={2.35} /></button>
                         <div className="nearby-info">
                           <strong>{place.name}</strong>
                           <span>{place.primaryTypeDisplayName || inferPlaceCategory(place.primaryType, place.types)}</span>
@@ -3349,7 +1548,7 @@ function TodayView({ data, setData }) {
                       </article>
                     ))}
                   </div>
-                  <div className="maps-attribution nearby-credit" aria-label="Google Maps attribution">Google Maps</div>
+                  <div className="maps-attribution nearby-credit">OpenStreetMap data</div>
                 </>
               )}
             </div>
@@ -3357,8 +1556,8 @@ function TodayView({ data, setData }) {
         </div>
       </PlanAccordionSection>
 
-      {items.filter((item) => isMapped(item.locationData)).length >= 2 && (
-        <PlanAccordionSection id="today-transport" icon={TrainFront} title="Transport between stops" subtitle="Travel time and options between each stop" open={openTodaySections.transport} onToggle={() => toggleTodaySection('transport')}>
+      {items.filter((item) => isMapped(item.locationData)).length >= 1 && (
+        <PlanAccordionSection id="today-transport" icon={TrainFront} title="Transport & nearby stops" subtitle="Local estimates, detailed routes on demand, and nearby transit" open={openTodaySections.transport} onToggle={() => toggleTodaySection('transport')}>
           <div className="card day-route-card accordion-inner-card">
             <div className="day-route-list">
               {items.slice(0, -1).map((item, index) => {
@@ -3379,6 +1578,11 @@ function TodayView({ data, setData }) {
                 )
               })}
             </div>
+            {(() => {
+              const currentMapped = items.find((item) => isMapped(item.locationData) && !['done', 'skipped'].includes(progress[item.key]))
+                || items.find((item) => isMapped(item.locationData))
+              return currentMapped ? <NearbyTransportStops location={currentMapped.locationData} /> : null
+            })()}
           </div>
         </PlanAccordionSection>
       )}
