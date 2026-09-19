@@ -2,6 +2,12 @@ name = "diy-travel-maps"
 main = "src/index.js"
 compatibility_date = "2026-09-15"
 
+workers_dev = true
+preview_urls = false
+
 [vars]
-ALLOWED_ORIGINS = "http://localhost:5173"
+ALLOWED_ORIGINS = "http://localhost:5173,https://bdisccc.github.io"
 MAX_REQUESTS_PER_MINUTE = "60"
+
+# Keep this commented until we deploy our own MOTIS instance.
+# MOTIS_BASE_URL = "https://your-motis.example.com"
