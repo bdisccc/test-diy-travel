@@ -146,6 +146,14 @@
 .nearby-transit-head span,
 .nearby-transit-message { color: var(--muted); font-size: 10px; line-height: 1.4; }
 
+.nearby-transit-head > button,
+.nearby-transit-action {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
 .nearby-transit-list {
   display: grid;
   gap: 8px;

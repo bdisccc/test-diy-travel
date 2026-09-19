@@ -7,7 +7,7 @@ export const FREE_USAGE_LIMITS = Object.freeze({
 })
 
 export const mapConfig = Object.freeze({
-  expectedWorkerVersion: '3.1.1',
+  expectedWorkerVersion: '3.1.2',
   mapProvider: 'openfreemap',
   mapRenderer: 'maplibre',
   mapStyleUrl: import.meta.env.VITE_MAP_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',

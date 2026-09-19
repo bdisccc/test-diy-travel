@@ -98,13 +98,15 @@ async function searchByCoordinates(place, signal) {
 
 export async function getPlaceImage(place, { signal = null, bypassCache = false } = {}) {
   if (place?.image?.url) return place.image
-  const key = `image:${place?.locationId || place?.providerId || place?.name || 'unknown'}`
+  const key = `image:v2:${place?.locationId || place?.providerId || place?.name || 'unknown'}`
   const result = await cached(key, mapConfig.cache.imageMs, async () => {
     recordMapUsage('imageRequests')
     let page = null
-    try { page = await searchByName(place, signal) } catch {}
+    // Nearby cards already have coordinates. Prefer a geographically local page first
+    // so generic names do not accidentally pull a same-named place from another country.
+    try { page = await searchByCoordinates(place, signal) } catch {}
     if (!page) {
-      try { page = await searchByCoordinates(place, signal) } catch {}
+      try { page = await searchByName(place, signal) } catch {}
     }
     if (!page?.thumbnail?.source) return null
     let attribution = null

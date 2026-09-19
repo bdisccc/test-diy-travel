@@ -14,7 +14,13 @@ function categoryIcon(category, size = 20) {
   return <MapPin size={size} />
 }
 
-export default function PlacePhoto({ place = null, name = 'Place', className = '' }) {
+function compactAttribution(photo) {
+  const rawAuthor = String(photo?.author || photo?.attribution || '').trim()
+  const author = rawAuthor.replace(/\s+from\s+.+$/i, '').trim()
+  return author || photo?.source || 'Wikimedia'
+}
+
+export default function PlacePhoto({ place = null, name = 'Place', className = '', creditMode = 'full' }) {
   const figureRef = useRef(null)
   const embedded = useMemo(() => place?.image?.url ? place.image : null, [place?.image?.url])
   const [photo, setPhoto] = useState(embedded)
@@ -76,9 +82,17 @@ export default function PlacePhoto({ place = null, name = 'Place', className = '
       ) : status === 'ready' ? (
         <>
           <img src={photo.url} alt={name} loading="lazy" onError={() => setStatus('empty')} />
-          <figcaption>
-            {photo.pageUrl ? <a href={photo.pageUrl} target="_blank" rel="noreferrer">{photo.attribution || 'Wikimedia'}</a> : <span>{photo.attribution || 'Wikimedia'}</span>}
-            <span className="photo-source">{[photo.source || 'Wikimedia', photo.license].filter(Boolean).join(' · ')}</span>
+          <figcaption className={creditMode === 'compact' ? 'compact-photo-credit' : ''} title={[photo.attribution, photo.source, photo.license].filter(Boolean).join(' · ')}>
+            {creditMode === 'compact' ? (
+              photo.pageUrl
+                ? <a href={photo.pageUrl} target="_blank" rel="noreferrer">Photo · {compactAttribution(photo)}</a>
+                : <span>Photo · {compactAttribution(photo)}</span>
+            ) : (
+              <>
+                {photo.pageUrl ? <a href={photo.pageUrl} target="_blank" rel="noreferrer">{photo.attribution || 'Wikimedia'}</a> : <span>{photo.attribution || 'Wikimedia'}</span>}
+                <span className="photo-source">{[photo.source || 'Wikimedia', photo.license].filter(Boolean).join(' · ')}</span>
+              </>
+            )}
           </figcaption>
         </>
       ) : (

@@ -369,6 +369,16 @@ export function NearbyTransportStops({ location }) {
     }
   }
 
+  useEffect(() => {
+    if (!isMapped(location)) return undefined
+    const timer = window.setTimeout(() => {
+      findStops(false)
+    }, 120)
+    return () => window.clearTimeout(timer)
+    // Run only when the mapped anchor actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location?.latitude, location?.longitude])
+
   async function loadWalkingRoute(stop) {
     setActiveStop(stop)
     setWalkRoute(null)
@@ -391,8 +401,16 @@ export function NearbyTransportStops({ location }) {
     <div className="nearby-transit-block">
       <div className="nearby-transit-head">
         <div><strong>Nearby transportation</strong><span>Actual transit stops from the configured MOTIS/GTFS coverage near {location.name || location.location || 'this location'}</span></div>
-        <button type="button" className="secondary-button" onClick={() => findStops(Boolean(stops.length))} disabled={status === 'loading'}>
-          {status === 'loading' ? <LoaderCircle className="spin" size={15} /> : <TrainFront size={15} />} {status === 'loading' ? 'Finding…' : stops.length ? 'Refresh stops' : 'Find stops'}
+        <button
+          type="button"
+          className="secondary-button nearby-transit-action"
+          onClick={() => findStops(Boolean(stops.length))}
+          disabled={status === 'loading'}
+          aria-busy={status === 'loading'}
+          data-debug-name="Find nearby transit stops"
+        >
+          {status === 'loading' ? <LoaderCircle className="spin" size={15} /> : <TrainFront size={15} />}
+          {status === 'loading' ? 'Finding…' : stops.length ? 'Refresh stops' : status === 'error' ? 'Try again' : 'Find stops'}
         </button>
       </div>
       {error && <div className={`nearby-transit-message ${status === 'error' ? 'error' : ''}`}>{error}</div>}

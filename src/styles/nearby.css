@@ -161,13 +161,26 @@
   border-radius: 6px;
   background: rgba(11, 31, 26, 0.5);
   color: rgba(255, 255, 255, 0.9);
-  font-size: 6px;
+  font-size: 8px;
   line-height: 1.2;
   backdrop-filter: blur(4px);
 }
 
 .nearby-card .nearby-photo .photo-source {
   display: none;
+}
+
+.nearby-card .nearby-photo figcaption.compact-photo-credit {
+  max-width: calc(100% - 92px);
+  background: rgba(11, 31, 26, 0.68);
+  font-weight: 650;
+  letter-spacing: 0.005em;
+}
+
+.nearby-card .nearby-photo figcaption.compact-photo-credit a,
+.nearby-card .nearby-photo figcaption.compact-photo-credit span {
+  color: rgba(255, 255, 255, 0.94);
+  text-decoration: none;
 }
 
 .nearby-distance {
@@ -240,7 +253,7 @@
   margin: 0;
   overflow: hidden;
   color: #fff;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1.16;
   letter-spacing: -0.025em;
@@ -369,7 +382,7 @@
   }
 
   .nearby-info strong {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .nearby-card .nearby-photo figcaption {

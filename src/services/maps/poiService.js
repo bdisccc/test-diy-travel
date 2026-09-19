@@ -94,9 +94,15 @@ function normalizePoiFeature(feature = {}, anchor) {
   return place
 }
 
-function normalizePoiCollection(payload, anchor) {
+function normalizePoiCollection(payload, anchor, radiusMeters = Infinity) {
   const features = Array.isArray(payload?.features) ? payload.features : []
-  return features.map((feature) => normalizePoiFeature(feature, anchor)).filter(Boolean)
+  const maxDistance = Number.isFinite(Number(radiusMeters))
+    ? Math.max(125, Number(radiusMeters) * 1.05)
+    : Infinity
+
+  return features
+    .map((feature) => normalizePoiFeature(feature, anchor))
+    .filter((place) => place && Number.isFinite(Number(place.distanceMeters)) && Number(place.distanceMeters) <= maxDistance)
 }
 
 function categoryScore(place, requestedCategories = []) {
@@ -139,7 +145,7 @@ export async function getNearbyPlaces(location, {
   const radius = Math.max(100, Math.min(mapConfig.maxNearbyRadiusMeters, Number(radiusMeters) || mapConfig.nearbyRadiusMeters))
   const cell = coordinateCell(latitude, longitude, 3)
   const normalizedKind = kind === 'transport' ? 'transport' : 'ideas'
-  const key = `nearby:${normalizedKind}:${cell}:${radius}`
+  const key = `nearby:v2:${normalizedKind}:${cell}:${radius}`
   const result = await cached(key, mapConfig.cache.nearbyMs, async () => {
     const { data } = await mapsFetch('/nearby', {
       method: 'POST',
@@ -147,8 +153,9 @@ export async function getNearbyPlaces(location, {
       signal,
       usageKind: 'poiRequests',
     })
-    return normalizePoiCollection(data, { latitude, longitude })
+    return normalizePoiCollection(data, { latitude, longitude }, radius)
   }, { bypass: bypassCache })
   recordMapUsage('', { cacheHit: result.cacheHit })
-  return result.value
+  const maxDistance = Math.max(125, radius * 1.05)
+  return (result.value || []).filter((place) => Number.isFinite(Number(place?.distanceMeters)) && Number(place.distanceMeters) <= maxDistance)
 }

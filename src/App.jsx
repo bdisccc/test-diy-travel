@@ -1535,7 +1535,7 @@ function TodayView({ data, setData }) {
                   <div className="nearby-list">
                     {visibleNearbyPlaces.map((place) => (
                       <article className="nearby-card" key={place.locationId || place.providerId || `${place.name}-${place.latitude}-${place.longitude}`}>
-                        <PlacePhoto place={place} name={place.name} className="nearby-photo" />
+                        <PlacePhoto place={place} name={place.name} className="nearby-photo" creditMode="compact" />
                         <div className="nearby-distance">
                           {formatNearbyDistance(place.distanceMeters)}
                         </div>

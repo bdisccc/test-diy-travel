@@ -1,6 +1,6 @@
 const HEIGIT_BASE = 'https://api.heigit.org'
 const CACHE_VERSION = 'v13'
-const WORKER_VERSION = '3.1.1'
+const WORKER_VERSION = '3.1.2'
 const OPENPOI_ALLOWED_GROUPS = new Set([100, 120, 130, 150, 160, 190, 200, 220, 260, 330, 360, 390, 420, 560, 580, 620])
 const ALLOWED_ROUTE_MODES = new Set(['walking', 'cycling', 'driving'])
 const RATE_BUCKETS = new Map()
@@ -1304,9 +1304,11 @@ async function proxyTransitStops(request, env) {
   const latDelta = radiusMeters / 111320
   const lonScale = Math.max(0.2, Math.cos(latitude * Math.PI / 180))
   const lonDelta = radiusMeters / (111320 * lonScale)
-  const min = `${latitude - latDelta},${longitude - lonDelta}`
-  const max = `${latitude + latDelta},${longitude + lonDelta}`
-  const params = new URLSearchParams({ min, max, grouped: 'true', language: 'en' })
+  // MOTIS map/stops defines `min` as the lower-right corner and `max`
+  // as the upper-left corner, so longitude runs east -> west here.
+  const min = `${latitude - latDelta},${longitude + lonDelta}`
+  const max = `${latitude + latDelta},${longitude - lonDelta}`
+  const params = new URLSearchParams({ min, max, language: 'en' })
   const key = `transit/stops/${transit.provider}/${latitude.toFixed(3)},${longitude.toFixed(3)}/${radiusMeters}`
 
   return cacheRequest(request, key, 300, async () => {
@@ -1371,7 +1373,7 @@ async function handle(request, env) {
       response = json({
         ok: true,
         version: WORKER_VERSION,
-        build: 'stabilize-search-mobility-catalog',
+        build: 'nearby-transit-ui-fixes',
         routes: [
           '/api/maps/nearby',
           '/api/maps/route',
@@ -1393,7 +1395,7 @@ async function handle(request, env) {
       response = json({
         ok: true,
         version: WORKER_VERSION,
-        build: 'stabilize-search-mobility-catalog',
+        build: 'nearby-transit-ui-fixes',
         provider: 'heigit',
         transitProvider: transit.provider || 'not-configured',
         mobilityDatabase: mobilityDatabaseConfigured(env) ? 'configured' : 'not-configured',
